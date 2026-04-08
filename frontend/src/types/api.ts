@@ -61,3 +61,33 @@ interface DictItem {
   status: number;
   description?: string;
 }
+
+/** 部门 */
+interface Department {
+  id: number;
+  dept_name: string;
+  dept_code: string;
+  parent_id?: number;
+  leader_id?: number;
+  sort_order: number;
+  status: number;
+  created_at?: string;
+  children?: Department[];
+}
+
+/** 系统用户 */
+interface SystemUser {
+  id: number;
+  username: string;
+  real_name: string;
+  phone?: string;
+  email?: string;
+  avatar?: string;
+  dept_id?: number;
+  dept_name?: string;
+  position?: string;
+  role: string;
+  status: number;
+  last_login_at?: string;
+  created_at?: string;
+}

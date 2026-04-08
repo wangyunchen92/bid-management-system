@@ -18,4 +18,16 @@ export const SYSTEM_API = {
   DICT_ITEM_UPDATE: (id: number) => `${API_PREFIX}/system/dict-items/${id}`,
   DICT_ITEM_DELETE: (id: number) => `${API_PREFIX}/system/dict-items/${id}`,
   DICT_BY_CODE: (code: string) => `${API_PREFIX}/system/dicts/${code}`,
+  // 部门
+  DEPT_TREE: `${API_PREFIX}/system/departments/tree`,
+  DEPT_CREATE: `${API_PREFIX}/system/departments`,
+  DEPT_DETAIL: (id: number) => `${API_PREFIX}/system/departments/${id}`,
+  DEPT_UPDATE: (id: number) => `${API_PREFIX}/system/departments/${id}`,
+  DEPT_DELETE: (id: number) => `${API_PREFIX}/system/departments/${id}`,
+  // 用户
+  USER_LIST: `${API_PREFIX}/system/users`,
+  USER_CREATE: `${API_PREFIX}/system/users`,
+  USER_UPDATE: (id: number) => `${API_PREFIX}/system/users/${id}`,
+  USER_DELETE: (id: number) => `${API_PREFIX}/system/users/${id}`,
+  USER_RESET_PWD: (id: number) => `${API_PREFIX}/system/users/${id}/reset-password`,
 } as const;
