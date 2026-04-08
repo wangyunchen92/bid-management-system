@@ -57,3 +57,28 @@ async def get_current_user(
         raise UnauthorizedException("用户不存在或已被禁用")
 
     return user
+
+
+async def require_super_admin(
+    user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> int:
+    from app.models.system import SysUser
+    from app.common.exceptions import ForbiddenException
+
+    result = await db.execute(
+        select(SysUser).where(
+            SysUser.id == user_id,
+            SysUser.is_deleted == 0,
+            SysUser.status == 1,
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise UnauthorizedException("用户不存在或已被禁用")
+
+    if user.role != "SUPER_ADMIN":
+        raise ForbiddenException("需要超级管理员权限")
+
+    return user_id
