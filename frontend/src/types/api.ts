@@ -75,6 +75,13 @@ interface Department {
   children?: Department[];
 }
 
+/** 用户角色信息 */
+interface UserRoleInfo {
+  role_id: number;
+  role_name: string;
+  role_code: string;
+}
+
 /** 系统用户 */
 interface SystemUser {
   id: number;
@@ -89,5 +96,17 @@ interface SystemUser {
   role: string;
   status: number;
   last_login_at?: string;
+  created_at?: string;
+  roles?: UserRoleInfo[];
+}
+
+/** 角色 */
+interface SysRole {
+  id: number;
+  role_name: string;
+  role_code: string;
+  description?: string;
+  sort_order: number;
+  status: number;
   created_at?: string;
 }

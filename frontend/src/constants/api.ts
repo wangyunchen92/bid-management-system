@@ -30,4 +30,11 @@ export const SYSTEM_API = {
   USER_UPDATE: (id: number) => `${API_PREFIX}/system/users/${id}`,
   USER_DELETE: (id: number) => `${API_PREFIX}/system/users/${id}`,
   USER_RESET_PWD: (id: number) => `${API_PREFIX}/system/users/${id}/reset-password`,
+  // 角色
+  ROLE_LIST: `${API_PREFIX}/system/roles`,
+  ROLE_CREATE: `${API_PREFIX}/system/roles`,
+  ROLE_UPDATE: (id: number) => `${API_PREFIX}/system/roles/${id}`,
+  ROLE_DELETE: (id: number) => `${API_PREFIX}/system/roles/${id}`,
+  USER_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
+  ASSIGN_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
 } as const;

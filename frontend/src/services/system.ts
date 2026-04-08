@@ -72,3 +72,29 @@ export function deleteUser(id: number) {
 export function resetUserPassword(id: number) {
   return put(SYSTEM_API.USER_RESET_PWD(id));
 }
+
+// ========== 角色 ==========
+
+export function getRoleList() {
+  return get<SysRole[]>(SYSTEM_API.ROLE_LIST);
+}
+
+export function createRole(data: Partial<SysRole>) {
+  return post<SysRole>(SYSTEM_API.ROLE_CREATE, data);
+}
+
+export function updateRole(id: number, data: Partial<SysRole>) {
+  return put<SysRole>(SYSTEM_API.ROLE_UPDATE(id), data);
+}
+
+export function deleteRole(id: number) {
+  return del(SYSTEM_API.ROLE_DELETE(id));
+}
+
+export function getUserRoles(userId: number) {
+  return get<UserRoleInfo[]>(SYSTEM_API.USER_ROLES(userId));
+}
+
+export function assignUserRoles(userId: number, roleIds: number[]) {
+  return put<UserRoleInfo[]>(SYSTEM_API.ASSIGN_ROLES(userId), { role_ids: roleIds });
+}
