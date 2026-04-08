@@ -13,7 +13,7 @@ from app.common.exceptions import (
     NotFoundException,
 )
 from app.common.pagination import PaginationParams, paginate
-from app.models.system import SysDictItem, SysDictType, SysDepartment, SysUser
+from app.models.system import SysDictItem, SysDictType, SysDepartment, SysUser, SysRole, SysUserRole
 from app.schemas.system import (
     DictItemCreate,
     DictItemResponse,
@@ -27,6 +27,9 @@ from app.schemas.system import (
     UserCreate,
     UserUpdate,
     UserResponse,
+    RoleCreate,
+    RoleUpdate,
+    RoleResponse,
 )
 from app.common.security import hash_password
 
@@ -347,6 +350,13 @@ class SystemService:
                 )
                 dept_name = dept_result.scalar_one_or_none()
                 user_dict["dept_name"] = dept_name
+            # 获取用户角色
+            role_result = await db.execute(
+                select(SysRole.id, SysRole.role_name, SysRole.role_code)
+                .join(SysUserRole, SysRole.id == SysUserRole.role_id)
+                .where(SysUserRole.user_id == user.id, SysRole.is_deleted == 0)
+            )
+            user_dict["roles"] = [{"role_id": r[0], "role_name": r[1], "role_code": r[2]} for r in role_result.all()]
             items.append(user_dict)
         result["items"] = items
         return result
@@ -380,6 +390,13 @@ class SystemService:
                 select(SysDepartment.dept_name).where(SysDepartment.id == user.dept_id)
             )
             user_dict["dept_name"] = dept_result.scalar_one_or_none()
+        # 获取用户角色
+        role_result = await db.execute(
+            select(SysRole.id, SysRole.role_name, SysRole.role_code)
+            .join(SysUserRole, SysRole.id == SysUserRole.role_id)
+            .where(SysUserRole.user_id == user.id, SysRole.is_deleted == 0)
+        )
+        user_dict["roles"] = [{"role_id": r[0], "role_name": r[1], "role_code": r[2]} for r in role_result.all()]
         return user_dict
 
     async def update_user(self, db: AsyncSession, user_id: int, data: UserUpdate, current_user_id: int) -> dict:
@@ -410,6 +427,13 @@ class SystemService:
                 select(SysDepartment.dept_name).where(SysDepartment.id == user.dept_id)
             )
             user_dict["dept_name"] = dept_result.scalar_one_or_none()
+        # 获取用户角色
+        role_result = await db.execute(
+            select(SysRole.id, SysRole.role_name, SysRole.role_code)
+            .join(SysUserRole, SysRole.id == SysUserRole.role_id)
+            .where(SysUserRole.user_id == user.id, SysRole.is_deleted == 0)
+        )
+        user_dict["roles"] = [{"role_id": r[0], "role_name": r[1], "role_code": r[2]} for r in role_result.all()]
         return user_dict
 
     async def delete_user(self, db: AsyncSession, user_id: int, current_user_id: int) -> None:
@@ -437,6 +461,98 @@ class SystemService:
         user.password_hash = hash_password("123456")
         user.updated_by = current_user_id
         await db.flush()
+
+    # ================================================================== #
+    #  角色管理
+    # ================================================================== #
+
+    async def list_roles(self, db: AsyncSession) -> List[dict]:
+        result = await db.execute(
+            select(SysRole)
+            .where(SysRole.is_deleted == 0)
+            .order_by(SysRole.sort_order.asc(), SysRole.id.asc())
+        )
+        return [RoleResponse.model_validate(r).model_dump() for r in result.scalars().all()]
+
+    async def create_role(self, db: AsyncSession, data: RoleCreate, user_id: int) -> dict:
+        existing = await db.execute(
+            select(SysRole).where(SysRole.role_code == data.role_code, SysRole.is_deleted == 0)
+        )
+        if existing.scalar_one_or_none():
+            raise DuplicateException(f"角色编码 '{data.role_code}' 已存在")
+
+        role = SysRole(**data.model_dump(), created_by=user_id, updated_by=user_id)
+        db.add(role)
+        await db.flush()
+        await db.refresh(role)
+        return RoleResponse.model_validate(role).model_dump()
+
+    async def update_role(self, db: AsyncSession, role_id: int, data: RoleUpdate, user_id: int) -> dict:
+        result = await db.execute(
+            select(SysRole).where(SysRole.id == role_id, SysRole.is_deleted == 0)
+        )
+        role = result.scalar_one_or_none()
+        if role is None:
+            raise NotFoundException("角色不存在")
+
+        update_data = data.model_dump(exclude_unset=True)
+        update_data["updated_by"] = user_id
+        for key, value in update_data.items():
+            setattr(role, key, value)
+        await db.flush()
+        await db.refresh(role)
+        return RoleResponse.model_validate(role).model_dump()
+
+    async def delete_role(self, db: AsyncSession, role_id: int, user_id: int) -> None:
+        result = await db.execute(
+            select(SysRole).where(SysRole.id == role_id, SysRole.is_deleted == 0)
+        )
+        role = result.scalar_one_or_none()
+        if role is None:
+            raise NotFoundException("角色不存在")
+        if role.role_code == "SUPER_ADMIN":
+            raise BusinessException("预置角色不可删除")
+
+        user_count = await db.execute(
+            select(SysUserRole).where(SysUserRole.role_id == role_id).limit(1)
+        )
+        if user_count.scalar_one_or_none():
+            raise BusinessException("该角色下存在关联用户，请先移除")
+
+        role.is_deleted = 1
+        role.updated_by = user_id
+        await db.flush()
+
+    async def get_user_roles(self, db: AsyncSession, user_id: int) -> List[dict]:
+        result = await db.execute(
+            select(SysRole.id, SysRole.role_name, SysRole.role_code)
+            .join(SysUserRole, SysRole.id == SysUserRole.role_id)
+            .where(SysUserRole.user_id == user_id, SysRole.is_deleted == 0, SysRole.status == 1)
+        )
+        return [{"role_id": r[0], "role_name": r[1], "role_code": r[2]} for r in result.all()]
+
+    async def assign_user_roles(self, db: AsyncSession, user_id: int, role_ids: List[int], current_user_id: int) -> List[dict]:
+        # 验证用户存在
+        user_result = await db.execute(
+            select(SysUser).where(SysUser.id == user_id, SysUser.is_deleted == 0)
+        )
+        if user_result.scalar_one_or_none() is None:
+            raise NotFoundException("用户不存在")
+
+        # 先删后增
+        from sqlalchemy import delete
+        await db.execute(delete(SysUserRole).where(SysUserRole.user_id == user_id))
+
+        for role_id in role_ids:
+            role_result = await db.execute(
+                select(SysRole).where(SysRole.id == role_id, SysRole.is_deleted == 0)
+            )
+            if role_result.scalar_one_or_none() is None:
+                raise BusinessException(f"角色 ID {role_id} 不存在")
+            db.add(SysUserRole(user_id=user_id, role_id=role_id))
+
+        await db.flush()
+        return await self.get_user_roles(db, user_id)
 
 
 system_service = SystemService()

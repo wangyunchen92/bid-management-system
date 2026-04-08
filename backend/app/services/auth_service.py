@@ -83,6 +83,14 @@ class AuthService:
         is_super_admin = user.role == "SUPER_ADMIN"
         permissions = ["*"] if is_super_admin else []
 
+        from app.models.system import SysRole, SysUserRole
+        role_result = await db.execute(
+            select(SysRole.id, SysRole.role_name, SysRole.role_code)
+            .join(SysUserRole, SysRole.id == SysUserRole.role_id)
+            .where(SysUserRole.user_id == user_id, SysRole.is_deleted == 0)
+        )
+        roles = [{"role_id": r[0], "role_name": r[1], "role_code": r[2]} for r in role_result.all()]
+
         return {
             "id": user.id,
             "username": user.username,
@@ -92,6 +100,7 @@ class AuthService:
             "avatar": user.avatar,
             "role": user.role,
             "permissions": permissions,
+            "roles": roles,
         }
 
     async def change_password(self, db: AsyncSession, user_id: int, old_password: str, new_password: str) -> bool:
