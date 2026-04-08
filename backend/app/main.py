@@ -125,6 +125,30 @@ async def _init_base_data():
             await session.commit()
             logger.info("默认管理员 admin/admin123 已创建")
 
+        # 创建默认部门
+        from app.models.system import SysDepartment
+        dept_result = await session.execute(select(SysDepartment).limit(1))
+        if not dept_result.scalar_one_or_none():
+            root_dept = SysDepartment(
+                dept_name="总经办",
+                dept_code="ROOT",
+                parent_id=None,
+                sort_order=0,
+                status=1,
+            )
+            session.add(root_dept)
+            await session.commit()
+            logger.info("默认部门 '总经办' 已创建")
+
+            # 将 admin 分配到默认部门
+            admin_result = await session.execute(
+                select(SysUser).where(SysUser.username == "admin")
+            )
+            admin_user = admin_result.scalar_one_or_none()
+            if admin_user:
+                admin_user.dept_id = root_dept.id
+                await session.commit()
+
         # 初始化字典数据
         dict_check = await session.execute(select(SysDictType).limit(1))
         if not dict_check.scalar_one_or_none():
