@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -60,5 +60,92 @@ class DictItemResponse(BaseModel):
     sort_order: int
     status: int
     description: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ========== 部门 ==========
+
+class DepartmentCreate(BaseModel):
+    dept_name: str = Field(..., max_length=100)
+    dept_code: str = Field(..., max_length=50)
+    parent_id: Optional[int] = Field(default=None)
+    leader_id: Optional[int] = Field(default=None)
+    sort_order: int = Field(default=0)
+    status: int = Field(default=1)
+
+
+class DepartmentUpdate(BaseModel):
+    dept_name: Optional[str] = Field(default=None, max_length=100)
+    parent_id: Optional[int] = Field(default=None)
+    leader_id: Optional[int] = Field(default=None)
+    sort_order: Optional[int] = Field(default=None)
+    status: Optional[int] = Field(default=None)
+
+
+class DepartmentResponse(BaseModel):
+    id: int
+    dept_name: str
+    dept_code: str
+    parent_id: Optional[int] = None
+    leader_id: Optional[int] = None
+    sort_order: int = 0
+    status: int = 1
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DepartmentTree(BaseModel):
+    id: int
+    dept_name: str
+    dept_code: str
+    parent_id: Optional[int] = None
+    leader_id: Optional[int] = None
+    sort_order: int = 0
+    status: int = 1
+    children: List["DepartmentTree"] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+# ========== 用户管理 ==========
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=2, max_length=50)
+    password: str = Field(..., min_length=6, max_length=128)
+    real_name: str = Field(..., min_length=1, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[str] = Field(default=None, max_length=100)
+    dept_id: Optional[int] = Field(default=None)
+    position: Optional[str] = Field(default=None, max_length=50)
+    role: str = Field(default="USER")
+    status: int = Field(default=1)
+
+
+class UserUpdate(BaseModel):
+    real_name: Optional[str] = Field(default=None, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[str] = Field(default=None, max_length=100)
+    dept_id: Optional[int] = Field(default=None)
+    position: Optional[str] = Field(default=None, max_length=50)
+    role: Optional[str] = Field(default=None)
+    status: Optional[int] = Field(default=None)
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    real_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    avatar: Optional[str] = None
+    dept_id: Optional[int] = None
+    dept_name: Optional[str] = None
+    position: Optional[str] = None
+    role: str = "USER"
+    status: int = 1
+    last_login_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

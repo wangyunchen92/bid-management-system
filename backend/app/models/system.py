@@ -24,9 +24,23 @@ class SysUser(BaseModel):
     phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     avatar: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dept_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    position: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="USER", server_default="USER")
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class SysDepartment(BaseModel):
+    """部门表"""
+    __tablename__ = "sys_department"
+
+    dept_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    dept_code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    leader_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
 
 
 class SysDictType(BaseModel):
