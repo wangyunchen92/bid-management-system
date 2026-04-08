@@ -14,6 +14,7 @@ from app.schemas.system import (
     DictItemCreate, DictItemUpdate, DictTypeCreate, DictTypeUpdate,
     DepartmentCreate, DepartmentUpdate,
     UserCreate, UserUpdate,
+    RoleCreate, RoleUpdate, AssignRolesRequest,
 )
 from app.services.system_service import system_service
 
@@ -245,3 +246,68 @@ async def reset_password(
 ):
     await system_service.reset_password(db, target_user_id, user_id)
     return success(message="密码已重置为 123456")
+
+
+# ================================================================== #
+#  角色管理
+# ================================================================== #
+
+@router.get("/roles", summary="角色列表")
+async def list_roles(
+    db: AsyncSession = Depends(get_db),
+    _: int = Depends(get_current_user_id),
+):
+    data = await system_service.list_roles(db)
+    return success(data=data)
+
+
+@router.post("/roles", summary="创建角色")
+async def create_role(
+    data: RoleCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(require_super_admin),
+):
+    role = await system_service.create_role(db, data, user_id)
+    return success(data=role, message="创建成功")
+
+
+@router.put("/roles/{role_id}", summary="更新角色")
+async def update_role(
+    role_id: int,
+    data: RoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(require_super_admin),
+):
+    role = await system_service.update_role(db, role_id, data, user_id)
+    return success(data=role, message="更新成功")
+
+
+@router.delete("/roles/{role_id}", summary="删除角色")
+async def delete_role(
+    role_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(require_super_admin),
+):
+    await system_service.delete_role(db, role_id, user_id)
+    return success(message="删除成功")
+
+
+@router.get("/users/{target_user_id}/roles", summary="获取用户角色")
+async def get_user_roles(
+    target_user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: int = Depends(get_current_user_id),
+):
+    data = await system_service.get_user_roles(db, target_user_id)
+    return success(data=data)
+
+
+@router.put("/users/{target_user_id}/roles", summary="分配用户角色")
+async def assign_user_roles(
+    target_user_id: int,
+    data: AssignRolesRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(require_super_admin),
+):
+    roles = await system_service.assign_user_roles(db, target_user_id, data.role_ids, user_id)
+    return success(data=roles, message="角色分配成功")

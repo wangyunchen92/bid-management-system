@@ -149,6 +149,33 @@ async def _init_base_data():
                 admin_user.dept_id = root_dept.id
                 await session.commit()
 
+        # 初始化角色
+        from app.models.system import SysRole, SysUserRole
+        role_result = await session.execute(select(SysRole).limit(1))
+        if not role_result.scalar_one_or_none():
+            roles_data = [
+                ("超级管理员", "SUPER_ADMIN", "拥有全部权限", 0),
+                ("管理员", "ADMIN", "日常管理操作", 1),
+                ("普通用户", "USER", "基础查看操作", 2),
+            ]
+            role_map = {}
+            for name, code, desc, sort in roles_data:
+                role = SysRole(role_name=name, role_code=code, description=desc, sort_order=sort, status=1)
+                session.add(role)
+                await session.flush()
+                role_map[code] = role.id
+
+            # admin 关联 SUPER_ADMIN
+            admin_result = await session.execute(
+                select(SysUser).where(SysUser.username == "admin")
+            )
+            admin_user = admin_result.scalar_one_or_none()
+            if admin_user and "SUPER_ADMIN" in role_map:
+                session.add(SysUserRole(user_id=admin_user.id, role_id=role_map["SUPER_ADMIN"]))
+
+            await session.commit()
+            logger.info("预置角色已创建，admin 已关联 SUPER_ADMIN")
+
         # 初始化字典数据
         dict_check = await session.execute(select(SysDictType).limit(1))
         if not dict_check.scalar_one_or_none():
