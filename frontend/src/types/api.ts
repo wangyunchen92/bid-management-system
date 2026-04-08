@@ -40,3 +40,24 @@ interface LoginResult {
   token_type: string;
   expires_in: number;
 }
+
+/** 字典类型 */
+interface DictType {
+  id: number;
+  dict_name: string;
+  dict_code: string;
+  description?: string;
+  status: number;
+  created_at?: string;
+}
+
+/** 字典项 */
+interface DictItem {
+  id: number;
+  dict_type_id: number;
+  item_label: string;
+  item_value: string;
+  sort_order: number;
+  status: number;
+  description?: string;
+}
