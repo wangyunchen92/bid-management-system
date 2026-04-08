@@ -147,5 +147,39 @@ class UserResponse(BaseModel):
     status: int = 1
     last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    roles: List[dict] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+# ========== 角色 ==========
+
+class RoleCreate(BaseModel):
+    role_name: str = Field(..., max_length=50)
+    role_code: str = Field(..., max_length=50)
+    description: Optional[str] = Field(default=None, max_length=255)
+    sort_order: int = Field(default=0)
+    status: int = Field(default=1)
+
+
+class RoleUpdate(BaseModel):
+    role_name: Optional[str] = Field(default=None, max_length=50)
+    description: Optional[str] = Field(default=None, max_length=255)
+    sort_order: Optional[int] = Field(default=None)
+    status: Optional[int] = Field(default=None)
+
+
+class RoleResponse(BaseModel):
+    id: int
+    role_name: str
+    role_code: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    status: int = 1
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AssignRolesRequest(BaseModel):
+    role_ids: List[int] = Field(default_factory=list)

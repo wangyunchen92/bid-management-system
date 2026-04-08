@@ -43,6 +43,27 @@ class SysDepartment(BaseModel):
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
 
 
+class SysRole(BaseModel):
+    """角色表"""
+    __tablename__ = "sys_role"
+
+    role_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    role_code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
+
+
+class SysUserRole(Base):
+    """用户角色关联表"""
+    __tablename__ = "sys_user_role"
+
+    id: Mapped[int] = mapped_column(_pk_type, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
 class SysDictType(BaseModel):
     __tablename__ = "sys_dict_type"
 
