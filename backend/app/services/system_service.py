@@ -79,9 +79,9 @@ class SystemService:
 
         # 检查是否有字典项
         items_result = await db.execute(
-            select(SysDictItem).where(SysDictItem.dict_type_id == dict_type_id)
+            select(SysDictItem).where(SysDictItem.dict_type_id == dict_type_id).limit(1)
         )
-        if items_result.scalar_one_or_none():
+        if items_result.scalars().first():
             raise BusinessException("该字典类型下存在字典项，请先删除字典项")
 
         obj.is_deleted = 1
@@ -113,9 +113,9 @@ class SystemService:
             select(SysDictItem).where(
                 SysDictItem.dict_type_id == dict_type_id,
                 SysDictItem.item_value == data.item_value,
-            )
+            ).limit(1)
         )
-        if existing.scalar_one_or_none():
+        if existing.scalars().first():
             raise DuplicateException(f"字典值 '{data.item_value}' 在该类型下已存在")
 
         obj = SysDictItem(
@@ -145,9 +145,9 @@ class SystemService:
                     SysDictItem.dict_type_id == obj.dict_type_id,
                     SysDictItem.item_value == update_data["item_value"],
                     SysDictItem.id != item_id,
-                )
+                ).limit(1)
             )
-            if existing.scalar_one_or_none():
+            if existing.scalars().first():
                 raise DuplicateException(f"字典值 '{update_data['item_value']}' 在该类型下已存在")
 
         for field, value in update_data.items():
