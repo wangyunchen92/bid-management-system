@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space, Typography, Spin } from 'antd';
 import {
   DashboardOutlined,
+  SettingOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -18,6 +19,14 @@ const { Text } = Typography;
 
 const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
+  {
+    key: '/system',
+    icon: <SettingOutlined />,
+    label: '系统管理',
+    children: [
+      { key: '/system/dict', label: '数据字典' },
+    ],
+  },
 ];
 
 export default function BasicLayout() {
@@ -137,7 +146,16 @@ export default function BasicLayout() {
               {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </div>
             <Text strong style={{ fontSize: 16 }}>
-              {menuItems.find((m) => m.key === location.pathname)?.label || ''}
+              {(() => {
+                for (const m of menuItems) {
+                  if (m.key === location.pathname) return m.label;
+                  if ('children' in m && m.children) {
+                    const child = m.children.find((c) => c.key === location.pathname);
+                    if (child) return child.label;
+                  }
+                }
+                return '';
+              })()}
             </Text>
           </Space>
 

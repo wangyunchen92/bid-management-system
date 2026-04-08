@@ -6,6 +6,7 @@ import BasicLayout from '@/layouts/BasicLayout';
 
 const Login = lazy(() => import('@/pages/Login'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Dict = lazy(() => import('@/pages/System/Dict'));
 
 export default function AppRoutes() {
   return (
@@ -16,6 +17,7 @@ export default function AppRoutes() {
         </Route>
         <Route element={<BasicLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/system/dict" element={<Dict />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
