@@ -375,7 +375,7 @@ class SystemService:
             if dept.scalar_one_or_none() is None:
                 raise BusinessException("部门不存在")
 
-        user_data = data.model_dump(exclude={"password"})
+        user_data = data.model_dump(exclude={"password", "role_ids"})
         user_data["password_hash"] = hash_password(data.password)
         user_data["created_by"] = current_user_id
         user_data["updated_by"] = current_user_id
@@ -383,6 +383,12 @@ class SystemService:
         db.add(user)
         await db.flush()
         await db.refresh(user)
+
+        # 分配角色
+        if data.role_ids:
+            for role_id in data.role_ids:
+                db.add(SysUserRole(user_id=user.id, role_id=role_id))
+            await db.flush()
 
         user_dict = UserResponse.model_validate(user).model_dump()
         if user.dept_id:

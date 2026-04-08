@@ -121,6 +121,7 @@ class UserCreate(BaseModel):
     position: Optional[str] = Field(default=None, max_length=50)
     role: str = Field(default="USER")
     status: int = Field(default=1)
+    role_ids: List[int] = Field(default_factory=list)
 
 
 class UserUpdate(BaseModel):
