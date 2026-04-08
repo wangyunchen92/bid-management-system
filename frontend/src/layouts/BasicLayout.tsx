@@ -5,6 +5,8 @@ import { Layout, Menu, Avatar, Dropdown, Space, Typography, Spin } from 'antd';
 import {
   DashboardOutlined,
   SettingOutlined,
+  ApartmentOutlined,
+  TeamOutlined,
   UserOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -24,6 +26,8 @@ const menuItems = [
     icon: <SettingOutlined />,
     label: '系统管理',
     children: [
+      { key: '/system/department', icon: <ApartmentOutlined />, label: '组织架构' },
+      { key: '/system/user', icon: <TeamOutlined />, label: '用户管理' },
       { key: '/system/dict', label: '数据字典' },
     ],
   },

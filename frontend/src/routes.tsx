@@ -7,6 +7,8 @@ import BasicLayout from '@/layouts/BasicLayout';
 const Login = lazy(() => import('@/pages/Login'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Dict = lazy(() => import('@/pages/System/Dict'));
+const Department = lazy(() => import('@/pages/System/Department'));
+const User = lazy(() => import('@/pages/System/User'));
 
 export default function AppRoutes() {
   return (
@@ -17,6 +19,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<BasicLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/system/department" element={<Department />} />
+          <Route path="/system/user" element={<User />} />
           <Route path="/system/dict" element={<Dict />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
