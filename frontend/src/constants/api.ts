@@ -38,3 +38,13 @@ export const SYSTEM_API = {
   USER_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
   ASSIGN_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
 } as const;
+
+export const APPROVAL_API = {
+  SUBMIT: `${API_PREFIX}/approval/submit`,
+  MY_PENDING: `${API_PREFIX}/approval/my-pending`,
+  MY_INITIATED: `${API_PREFIX}/approval/my-initiated`,
+  DETAIL: (id: number) => `${API_PREFIX}/approval/${id}`,
+  APPROVE: (id: number) => `${API_PREFIX}/approval/${id}/approve`,
+  REJECT: (id: number) => `${API_PREFIX}/approval/${id}/reject`,
+  TRANSFER: (id: number) => `${API_PREFIX}/approval/${id}/transfer`,
+} as const;

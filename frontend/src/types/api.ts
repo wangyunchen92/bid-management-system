@@ -110,3 +110,36 @@ interface SysRole {
   status: number;
   created_at?: string;
 }
+
+/** 审批实例 */
+interface ApprovalInstance {
+  id: number;
+  title: string;
+  biz_type: string;
+  biz_id?: number;
+  initiator_id: number;
+  initiator_name?: string;
+  approver_id: number;
+  approver_name?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  result_comment?: string;
+  approved_at?: string;
+  created_at?: string;
+}
+
+/** 审批记录 */
+interface ApprovalRecord {
+  id: number;
+  instance_id: number;
+  operator_id: number;
+  operator_name?: string;
+  action: 'SUBMIT' | 'APPROVE' | 'REJECT' | 'TRANSFER';
+  comment?: string;
+  created_at?: string;
+}
+
+/** 审批详情 */
+interface ApprovalDetail {
+  instance: ApprovalInstance;
+  records: ApprovalRecord[];
+}
