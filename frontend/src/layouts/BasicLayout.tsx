@@ -12,6 +12,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 
 import useAuthStore from '@/stores/useAuthStore';
@@ -22,6 +23,7 @@ const { Text } = Typography;
 
 const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/workflow', icon: <AuditOutlined />, label: '审批中心' },
   {
     key: '/system',
     icon: <SettingOutlined />,
