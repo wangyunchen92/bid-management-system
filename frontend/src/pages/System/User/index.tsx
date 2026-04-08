@@ -9,6 +9,7 @@ import {
 import type { TreeProps } from 'antd';
 import {
   getDepartmentTree, getUserList, createUser, updateUser, deleteUser, resetUserPassword,
+  getRoleList, assignUserRoles,
 } from '@/services/system';
 
 const { Text } = Typography;
@@ -44,11 +45,17 @@ export default function UserPage() {
   const [statusFilter, setStatusFilter] = useState<number | undefined>();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SystemUser | null>(null);
+  const [roleOptions, setRoleOptions] = useState<SysRole[]>([]);
   const [form] = Form.useForm();
 
   const loadDeptTree = useCallback(async () => {
     const res = await getDepartmentTree();
     setDeptTree(res.data);
+  }, []);
+
+  const loadRoles = useCallback(async () => {
+    const res = await getRoleList();
+    setRoleOptions(res.data);
   }, []);
 
   const loadUsers = useCallback(async () => {
@@ -66,7 +73,7 @@ export default function UserPage() {
     }
   }, [page, selectedDeptId, keyword, statusFilter]);
 
-  useEffect(() => { loadDeptTree(); }, [loadDeptTree]);
+  useEffect(() => { loadDeptTree(); loadRoles(); }, [loadDeptTree, loadRoles]);
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const handleDeptSelect: TreeProps['onSelect'] = (keys) => {
@@ -77,24 +84,34 @@ export default function UserPage() {
   const handleCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ status: 1, role: 'USER', dept_id: selectedDeptId });
+    form.setFieldsValue({ status: 1, role: 'USER', dept_id: selectedDeptId, role_ids: [] });
     setModalOpen(true);
   };
 
   const handleEdit = (user: SystemUser) => {
     setEditing(user);
-    form.setFieldsValue(user);
+    form.setFieldsValue({
+      ...user,
+      role_ids: user.roles?.map((r) => r.role_id) || [],
+    });
     setModalOpen(true);
   };
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const { role_ids, ...userData } = values;
     if (editing) {
-      const { username: _u, password: _p, ...updateData } = values;
+      const { username: _u, password: _p, ...updateData } = userData;
       await updateUser(editing.id, updateData);
+      if (role_ids !== undefined) {
+        await assignUserRoles(editing.id, role_ids);
+      }
       message.success('更新成功');
     } else {
-      await createUser(values);
+      const res = await createUser(userData);
+      if (role_ids?.length > 0 && res.data?.id) {
+        await assignUserRoles(res.data.id, role_ids);
+      }
       message.success('创建成功');
     }
     setModalOpen(false);
@@ -126,8 +143,14 @@ export default function UserPage() {
     { title: '岗位', dataIndex: 'position', key: 'position', width: 100,
       render: (v: string) => v || <Text type="secondary">-</Text>,
     },
-    { title: '角色', dataIndex: 'role', key: 'role', width: 120,
-      render: (v: string) => v === 'SUPER_ADMIN' ? <Tag color="red">超级管理员</Tag> : <Tag>普通用户</Tag>,
+    { title: '角色', dataIndex: 'roles', key: 'roles', width: 160,
+      render: (roles: UserRoleInfo[]) => roles?.length > 0
+        ? roles.map((r) => (
+            <Tag key={r.role_id} color={r.role_code === 'SUPER_ADMIN' ? 'red' : 'blue'}>
+              {r.role_name}
+            </Tag>
+          ))
+        : <Tag>无角色</Tag>,
     },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (v: number) => v === 1 ? <Tag color="success">启用</Tag> : <Tag color="default">停用</Tag>,
@@ -249,11 +272,12 @@ export default function UserPage() {
             </Form.Item>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Form.Item name="role" label="角色">
-              <Select options={[
-                { label: '超级管理员', value: 'SUPER_ADMIN' },
-                { label: '普通用户', value: 'USER' },
-              ]} />
+            <Form.Item name="role_ids" label="角色">
+              <Select
+                mode="multiple"
+                placeholder="选择角色"
+                options={roleOptions.map((r) => ({ label: r.role_name, value: r.id }))}
+              />
             </Form.Item>
             <Form.Item name="status" label="状态">
               <Select options={[

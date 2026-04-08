@@ -9,6 +9,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Dict = lazy(() => import('@/pages/System/Dict'));
 const Department = lazy(() => import('@/pages/System/Department'));
 const User = lazy(() => import('@/pages/System/User'));
+const Role = lazy(() => import('@/pages/System/Role'));
 
 export default function AppRoutes() {
   return (
@@ -21,6 +22,7 @@ export default function AppRoutes() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/system/department" element={<Department />} />
           <Route path="/system/user" element={<User />} />
+          <Route path="/system/role" element={<Role />} />
           <Route path="/system/dict" element={<Dict />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

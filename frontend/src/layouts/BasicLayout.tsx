@@ -11,6 +11,7 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 
 import useAuthStore from '@/stores/useAuthStore';
@@ -28,6 +29,7 @@ const menuItems = [
     children: [
       { key: '/system/department', icon: <ApartmentOutlined />, label: '组织架构' },
       { key: '/system/user', icon: <TeamOutlined />, label: '用户管理' },
+      { key: '/system/role', icon: <SafetyCertificateOutlined />, label: '角色管理' },
       { key: '/system/dict', label: '数据字典' },
     ],
   },
