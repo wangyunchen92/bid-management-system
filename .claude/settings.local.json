@@ -78,7 +78,16 @@
       "Bash(pkill -f \"uvicorn app.main:app.*8002\")",
       "Bash(python3 -c \"import sys,json; print\\(json.load\\(sys.stdin\\)['message']\\)\")",
       "Bash(rm -f /Users/wangyunchen/agents/标书系统/backend/data/bid.db)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'code={d[\\\\\"code\\\\\"]}'\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'code={d[\\\\\"code\\\\\"]}'\\)\")",
+      "WebSearch",
+      "WebFetch(domain:themenonlab.blog)",
+      "WebFetch(domain:www.volcengine.com)",
+      "Bash(python3:*)",
+      "Bash(pkill -f \"uvicorn app.main\")",
+      "Bash(pip list:*)",
+      "Bash(pip3 list:*)",
+      "Bash(echo \"Server PID: $!\" sleep 4 curl -s http://127.0.0.1:8002/health)",
+      "Bash(pip show:*)"
     ]
   }
 }

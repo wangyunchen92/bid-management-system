@@ -14,7 +14,7 @@ import {
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection,
-  aiGenerateSection, bidComplianceCheck, exportBidWord,
+  aiGenerateSectionStream, bidComplianceCheck, exportBidWord,
 } from '@/services/bid';
 import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
@@ -350,25 +350,31 @@ export default function BidWorkbenchPage() {
     }
   };
 
-  // AI 生成章节内容
+  // AI 流式生成章节内容
   const handleAiGenerate = async () => {
     if (!selectedSection) return;
     setAiGenOpen(false);
     setAiGenLoading(true);
-    const hide = message.loading('AI 正在生成中，请稍候（约 30-60 秒）...', 0);
-    try {
-      const res = await aiGenerateSection(selectedSection.id, {
+    setAiGenResult('');
+    setAiGenPreviewOpen(true);  // 立即打开预览，实时显示
+
+    await aiGenerateSectionStream(
+      selectedSection.id,
+      {
         tender_requirements: aiGenTenderReq || undefined,
         additional_context: aiGenAdditional || undefined,
-      });
-      setAiGenResult(res.data.generated_content);
-      setAiGenPreviewOpen(true);
-    } catch {
-      message.error('AI 生成失败，请重试');
-    } finally {
-      hide();
-      setAiGenLoading(false);
-    }
+      },
+      (chunk) => {
+        setAiGenResult((prev) => prev + chunk);
+      },
+      () => {
+        setAiGenLoading(false);
+      },
+      (err) => {
+        message.error(`AI 生成失败: ${err}`);
+        setAiGenLoading(false);
+      },
+    );
   };
 
   const handleAiAdopt = () => {
@@ -846,17 +852,24 @@ export default function BidWorkbenchPage() {
         </div>
       </Modal>
 
-      {/* AI 生成 - 预览 Modal */}
+      {/* AI 生成 - 流式预览 Modal */}
       <Modal
         title={
           <Space>
             <RobotOutlined style={{ color: '#7c3aed' }} />
-            AI 生成结果预览
+            {aiGenLoading ? 'AI 正在生成中...' : 'AI 生成结果预览'}
           </Space>
         }
         open={aiGenPreviewOpen}
-        onCancel={() => setAiGenPreviewOpen(false)}
-        footer={
+        onCancel={() => { if (!aiGenLoading) setAiGenPreviewOpen(false); }}
+        closable={!aiGenLoading}
+        maskClosable={!aiGenLoading}
+        footer={aiGenLoading ? (
+          <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+            <Spin size="small" style={{ marginRight: 8 }} />
+            AI 正在撰写中，请稍候...
+          </div>
+        ) : (
           <Space>
             <Button onClick={() => setAiGenPreviewOpen(false)}>取消</Button>
             <Button onClick={handleAiAppend} style={{ color: '#0d9488', borderColor: '#0d9488' }}>追加到末尾</Button>
@@ -868,16 +881,26 @@ export default function BidWorkbenchPage() {
               采纳（替换当前内容）
             </Button>
           </Space>
-        }
+        )}
         width={720}
-        destroyOnClose
       >
-        <TextArea
-          value={aiGenResult}
-          rows={18}
-          readOnly
-          style={{ fontSize: 14, lineHeight: 1.8, fontFamily: 'inherit', background: '#fafafa' }}
-        />
+        <div
+          style={{
+            whiteSpace: 'pre-wrap',
+            fontSize: 14,
+            lineHeight: 1.8,
+            padding: '12px 16px',
+            background: '#fafafa',
+            borderRadius: 8,
+            border: '1px solid #e2e8f0',
+            minHeight: 300,
+            maxHeight: 500,
+            overflow: 'auto',
+          }}
+        >
+          {aiGenResult || (aiGenLoading ? '等待 AI 响应...' : '暂无内容')}
+          {aiGenLoading && <span style={{ animation: 'blink 1s infinite', borderRight: '2px solid #0d9488' }}>&nbsp;</span>}
+        </div>
       </Modal>
 
       {/* 废标检查 - 输入 Modal */}

@@ -58,6 +58,56 @@ export function aiGenerateSection(sectionId: number, data: { tender_requirements
   return post<{ generated_content: string }>(BID_API.SECTION_AI_GENERATE(sectionId), data);
 }
 
+export async function aiGenerateSectionStream(
+  sectionId: number,
+  data: { tender_requirements?: string; additional_context?: string },
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (err: string) => void,
+) {
+  const token = localStorage.getItem('bid_system_access_token');
+  const response = await fetch(BID_API.SECTION_AI_GENERATE_STREAM(sectionId), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    onError(`请求失败: ${response.status}`);
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) { onError('无法读取响应流'); return; }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const json = JSON.parse(line.slice(6));
+          if (json.content) onChunk(json.content);
+          if (json.done) onDone();
+          if (json.error) onError(json.error);
+        } catch { /* skip */ }
+      }
+    }
+  }
+  onDone();
+}
+
 export function bidComplianceCheck(projectId: number, data: { tender_requirements?: string }) {
   return post<BidCheckResult>(BID_API.PROJECT_CHECK(projectId), data);
 }

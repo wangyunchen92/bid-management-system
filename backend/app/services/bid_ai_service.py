@@ -181,6 +181,71 @@ class BidAIService:
 
         return response.choices[0].message.content.strip()
 
+    async def generate_section_content_stream(
+        self,
+        db: AsyncSession,
+        section_id: int,
+        tender_requirements: Optional[str] = None,
+        additional_context: Optional[str] = None,
+    ):
+        """流式生成章节内容，yield 每个文本片段"""
+        section_result = await db.execute(
+            select(BidSection).where(BidSection.id == section_id, BidSection.is_deleted == 0)
+        )
+        section = section_result.scalar_one_or_none()
+        if not section:
+            raise Exception("章节不存在")
+
+        project_result = await db.execute(
+            select(BidProject).where(BidProject.id == section.project_id, BidProject.is_deleted == 0)
+        )
+        project = project_result.scalar_one_or_none()
+        project_title = project.title if project else "未知项目"
+
+        company_info = await self._get_company_info(db)
+        if tender_requirements:
+            tender_req = f"【招标要求】\n{tender_requirements}"
+        else:
+            tender_req = await self._get_tender_requirements(db, section.project_id)
+        sections_ctx = await self._get_other_sections_context(db, section.project_id, section_id)
+        additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
+
+        prompt = f"""你是一个专业的标书编写助手。请为以下标书章节撰写内容。
+
+标书项目：{project_title}
+当前章节：{section.title}
+
+{sections_ctx}
+
+{tender_req}
+
+{company_info}
+{additional_part}
+
+请撰写专业、详实的标书内容。要求：
+1. 内容要有针对性，紧扣招标要求
+2. 充分展示企业的资质和实力
+3. 引用具体的业绩案例和证书编号
+4. 语言正式规范，符合投标文件要求
+5. 篇幅适中（500-2000字）
+6. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
+
+        client = self._get_client()
+        stream = client.chat.completions.create(
+            model=settings.AI_MODEL,
+            messages=[
+                {"role": "system", "content": "你是一个经验丰富的标书编写专家，擅长根据招标要求和企业资料撰写高质量的投标文件内容。"},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=4096,
+            temperature=0.7,
+            stream=True,
+        )
+
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
     async def check_bid_compliance(
         self,
         db: AsyncSession,

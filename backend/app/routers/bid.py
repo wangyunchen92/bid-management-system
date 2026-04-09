@@ -3,6 +3,7 @@
 """
 
 import io
+import json
 import os
 from typing import Optional
 from urllib.parse import quote
@@ -175,6 +176,29 @@ async def ai_generate_section(
         additional_context=data.additional_context,
     )
     return success(data={"generated_content": content}, message="AI 内容已生成")
+
+
+@router.post("/sections/{section_id}/ai-generate-stream", summary="AI 流式生成章节内容")
+async def ai_generate_section_stream(
+    section_id: int,
+    data: AIGenerateRequest = AIGenerateRequest(),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """SSE 流式生成，前端实时接收文本片段"""
+    async def event_generator():
+        try:
+            async for chunk in bid_ai_service.generate_section_content_stream(
+                db, section_id,
+                tender_requirements=data.tender_requirements,
+                additional_context=data.additional_context,
+            ):
+                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/projects/{project_id}/compliance-check", summary="废标检查（旧路由，兼容保留）")
