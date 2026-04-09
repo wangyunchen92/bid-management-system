@@ -259,6 +259,37 @@ interface Product {
   created_at?: string;
 }
 
+/** 标书项目 */
+interface BidProject {
+  id: number;
+  tender_id?: number;
+  tender_title?: string;
+  title: string;
+  doc_type?: string;
+  status: string;
+  deadline?: string;
+  leader_id?: number;
+  leader_name?: string;
+  section_count: number;
+  remark?: string;
+  created_at?: string;
+}
+
+/** 标书章节 */
+interface BidSection {
+  id: number;
+  project_id: number;
+  parent_id?: number;
+  title: string;
+  content?: string;
+  sort_order: number;
+  assignee_id?: number;
+  assignee_name?: string;
+  status: string;
+  word_count: number;
+  children?: BidSection[];
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;

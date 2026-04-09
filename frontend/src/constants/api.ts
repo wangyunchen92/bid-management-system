@@ -90,6 +90,23 @@ export const LIBRARY_API = {
   PROD_DELETE: (id: number) => `${API_PREFIX}/library/products/${id}`,
 } as const;
 
+export const BID_API = {
+  // 项目
+  PROJECT_LIST: `${API_PREFIX}/bid/projects`,
+  PROJECT_CREATE: `${API_PREFIX}/bid/projects`,
+  PROJECT_DETAIL: (id: number) => `${API_PREFIX}/bid/projects/${id}`,
+  PROJECT_UPDATE: (id: number) => `${API_PREFIX}/bid/projects/${id}`,
+  PROJECT_DELETE: (id: number) => `${API_PREFIX}/bid/projects/${id}`,
+  PROJECT_BY_TENDER: (tenderId: number) => `${API_PREFIX}/bid/projects/by-tender/${tenderId}`,
+  // 章节
+  SECTION_TREE: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/sections`,
+  SECTION_CREATE: `${API_PREFIX}/bid/sections`,
+  SECTION_DETAIL: (id: number) => `${API_PREFIX}/bid/sections/${id}`,
+  SECTION_UPDATE: (id: number) => `${API_PREFIX}/bid/sections/${id}`,
+  SECTION_DELETE: (id: number) => `${API_PREFIX}/bid/sections/${id}`,
+  SECTION_REORDER: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/sections/reorder`,
+} as const;
+
 export const TENDER_API = {
   LIST: `${API_PREFIX}/tender/list`,
   CREATE: `${API_PREFIX}/tender`,
