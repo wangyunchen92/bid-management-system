@@ -14,6 +14,7 @@ const Role = lazy(() => import('@/pages/System/Role'));
 const TenderList = lazy(() => import('@/pages/Tender/List'));
 const TenderForm = lazy(() => import('@/pages/Tender/Form'));
 const TenderCalendar = lazy(() => import('@/pages/Tender/Calendar'));
+const Decision = lazy(() => import('@/pages/Decision'));
 
 export default function AppRoutes() {
   return (
@@ -28,6 +29,7 @@ export default function AppRoutes() {
           <Route path="/tender/create" element={<TenderForm />} />
           <Route path="/tender/calendar" element={<TenderCalendar />} />
           <Route path="/tender/:id" element={<TenderForm />} />
+          <Route path="/decision/list" element={<Decision />} />
           <Route path="/workflow" element={<Workflow />} />
           <Route path="/system/department" element={<Department />} />
           <Route path="/system/user" element={<User />} />

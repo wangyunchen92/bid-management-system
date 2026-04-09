@@ -14,6 +14,7 @@ import {
   SafetyCertificateOutlined,
   AuditOutlined,
   FileSearchOutlined,
+  SolutionOutlined,
 } from '@ant-design/icons';
 
 import useAuthStore from '@/stores/useAuthStore';
@@ -33,6 +34,7 @@ const menuItems = [
       { key: '/tender/calendar', label: '日历视图' },
     ],
   },
+  { key: '/decision/list', icon: <SolutionOutlined />, label: '投标决策' },
   { key: '/workflow', icon: <AuditOutlined />, label: '审批中心' },
   {
     key: '/system',
