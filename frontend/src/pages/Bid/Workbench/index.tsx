@@ -3,16 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, message, Empty, Spin,
-  Tooltip, Dropdown, Card, Drawer,
+  Tooltip, Dropdown, Card, Drawer, Progress, List,
 } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
-  FileSearchOutlined,
+  FileSearchOutlined, RobotOutlined, SafetyCertificateOutlined, DownloadOutlined,
+  CheckCircleFilled, WarningFilled, CloseCircleFilled,
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection,
+  aiGenerateSection, bidComplianceCheck, exportBidWord,
 } from '@/services/bid';
 import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
@@ -217,6 +219,24 @@ export default function BidWorkbenchPage() {
   const [editTitleOpen, setEditTitleOpen] = useState(false);
   const [editTitleSection, setEditTitleSection] = useState<BidSection | null>(null);
 
+  // AI 生成状态
+  const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [aiGenLoading, setAiGenLoading] = useState(false);
+  const [aiGenTenderReq, setAiGenTenderReq] = useState('');
+  const [aiGenAdditional, setAiGenAdditional] = useState('');
+  const [aiGenPreviewOpen, setAiGenPreviewOpen] = useState(false);
+  const [aiGenResult, setAiGenResult] = useState('');
+
+  // 废标检查状态
+  const [checkDrawerOpen, setCheckDrawerOpen] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkResult, setCheckResult] = useState<BidCheckResult | null>(null);
+  const [checkTenderReq, setCheckTenderReq] = useState('');
+  const [checkInputOpen, setCheckInputOpen] = useState(false);
+
+  // 导出状态
+  const [exportLoading, setExportLoading] = useState(false);
+
   const contentChanged = useRef(false);
 
   // 加载项目信息
@@ -327,6 +347,79 @@ export default function BidWorkbenchPage() {
     if (selectedSection?.id === editTitleSection.id) {
       setSelectedSection((prev) => prev ? { ...prev, title } : prev);
       setEditTitle(title);
+    }
+  };
+
+  // AI 生成章节内容
+  const handleAiGenerate = async () => {
+    if (!selectedSection) return;
+    setAiGenOpen(false);
+    setAiGenLoading(true);
+    const hide = message.loading('AI 正在生成中，请稍候（约 30-60 秒）...', 0);
+    try {
+      const res = await aiGenerateSection(selectedSection.id, {
+        tender_requirements: aiGenTenderReq || undefined,
+        additional_context: aiGenAdditional || undefined,
+      });
+      setAiGenResult(res.data.generated_content);
+      setAiGenPreviewOpen(true);
+    } catch {
+      message.error('AI 生成失败，请重试');
+    } finally {
+      hide();
+      setAiGenLoading(false);
+    }
+  };
+
+  const handleAiAdopt = () => {
+    setEditContent(aiGenResult);
+    contentChanged.current = true;
+    setAiGenPreviewOpen(false);
+    message.success('已采纳 AI 生成内容');
+  };
+
+  const handleAiAppend = () => {
+    setEditContent((prev) => (prev ? prev + '\n\n' + aiGenResult : aiGenResult));
+    contentChanged.current = true;
+    setAiGenPreviewOpen(false);
+    message.success('已追加 AI 生成内容');
+  };
+
+  // 废标检查
+  const handleComplianceCheck = async () => {
+    setCheckInputOpen(false);
+    setCheckDrawerOpen(true);
+    setCheckLoading(true);
+    setCheckResult(null);
+    try {
+      const res = await bidComplianceCheck(projectId, {
+        tender_requirements: checkTenderReq || undefined,
+      });
+      setCheckResult(res.data);
+    } catch {
+      message.error('废标检查失败，请重试');
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
+  // 导出 Word
+  const handleExportWord = async () => {
+    if (!project) return;
+    setExportLoading(true);
+    try {
+      const response = await exportBidWord(projectId);
+      const url = URL.createObjectURL(new Blob([response.data as BlobPart]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = project.title + '.docx';
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success('导出成功');
+    } catch {
+      message.error('导出失败，请重试');
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -454,6 +547,24 @@ export default function BidWorkbenchPage() {
         <Tag color={project.status === 'SUBMITTED' ? 'success' : project.status === 'IN_PROGRESS' ? 'processing' : 'default'}>
           {project.status === 'DRAFT' ? '草稿' : project.status === 'IN_PROGRESS' ? '编制中' : project.status === 'REVIEW' ? '审核中' : '已提交'}
         </Tag>
+        <div style={{ flex: 1 }} />
+        <Space>
+          <Button
+            icon={<SafetyCertificateOutlined />}
+            onClick={() => setCheckInputOpen(true)}
+            style={{ color: '#d97706', borderColor: '#d97706' }}
+          >
+            废标检查
+          </Button>
+          <Button
+            icon={<DownloadOutlined />}
+            loading={exportLoading}
+            onClick={handleExportWord}
+            style={{ color: '#0d9488', borderColor: '#0d9488' }}
+          >
+            导出 Word
+          </Button>
+        </Space>
       </div>
 
       {/* 左右分栏 */}
@@ -605,6 +716,18 @@ export default function BidWorkbenchPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Space>
                   <Button
+                    icon={<RobotOutlined />}
+                    loading={aiGenLoading}
+                    onClick={() => {
+                      setAiGenTenderReq('');
+                      setAiGenAdditional('');
+                      setAiGenOpen(true);
+                    }}
+                    style={{ color: '#7c3aed', borderColor: '#7c3aed' }}
+                  >
+                    AI 生成
+                  </Button>
+                  <Button
                     type="primary"
                     icon={<SaveOutlined />}
                     loading={savingContent}
@@ -676,6 +799,224 @@ export default function BidWorkbenchPage() {
             }
           }}
         />
+      </Drawer>
+
+      {/* AI 生成 - 输入 Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#7c3aed' }} />
+            AI 生成章节内容
+          </Space>
+        }
+        open={aiGenOpen}
+        onOk={handleAiGenerate}
+        onCancel={() => setAiGenOpen(false)}
+        okText="开始生成"
+        okButtonProps={{ style: { background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none' } }}
+        width={520}
+        destroyOnClose
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>招标要求（可选）</div>
+          <TextArea
+            value={aiGenTenderReq}
+            onChange={(e) => setAiGenTenderReq(e.target.value)}
+            rows={4}
+            placeholder="请输入该章节对应的招标要求，如：技术方案需包含系统架构图、实施计划..."
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>额外要求（可选）</div>
+          <TextArea
+            value={aiGenAdditional}
+            onChange={(e) => setAiGenAdditional(e.target.value)}
+            rows={3}
+            placeholder="其他补充要求，如：强调公司在行业内的经验、突出技术优势..."
+          />
+        </div>
+        <div style={{
+          padding: '10px 14px',
+          background: '#f5f3ff',
+          borderRadius: 6,
+          fontSize: 12,
+          color: '#6d28d9',
+        }}>
+          AI 将根据招标要求和企业资料库生成初稿内容，生成完成后可选择采纳或追加到当前内容。
+        </div>
+      </Modal>
+
+      {/* AI 生成 - 预览 Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#7c3aed' }} />
+            AI 生成结果预览
+          </Space>
+        }
+        open={aiGenPreviewOpen}
+        onCancel={() => setAiGenPreviewOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setAiGenPreviewOpen(false)}>取消</Button>
+            <Button onClick={handleAiAppend} style={{ color: '#0d9488', borderColor: '#0d9488' }}>追加到末尾</Button>
+            <Button
+              type="primary"
+              onClick={handleAiAdopt}
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none' }}
+            >
+              采纳（替换当前内容）
+            </Button>
+          </Space>
+        }
+        width={720}
+        destroyOnClose
+      >
+        <TextArea
+          value={aiGenResult}
+          rows={18}
+          readOnly
+          style={{ fontSize: 14, lineHeight: 1.8, fontFamily: 'inherit', background: '#fafafa' }}
+        />
+      </Modal>
+
+      {/* 废标检查 - 输入 Modal */}
+      <Modal
+        title={
+          <Space>
+            <SafetyCertificateOutlined style={{ color: '#d97706' }} />
+            废标检查
+          </Space>
+        }
+        open={checkInputOpen}
+        onOk={handleComplianceCheck}
+        onCancel={() => setCheckInputOpen(false)}
+        okText="开始检查"
+        okButtonProps={{ style: { background: 'linear-gradient(135deg, #d97706, #f59e0b)', border: 'none' } }}
+        width={480}
+        destroyOnClose
+      >
+        <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>招标要求（可选）</div>
+        <TextArea
+          value={checkTenderReq}
+          onChange={(e) => setCheckTenderReq(e.target.value)}
+          rows={5}
+          placeholder="粘贴招标文件中的关键要求，AI 将逐项核查标书是否满足..."
+        />
+        <div style={{ marginTop: 12, fontSize: 12, color: '#6b7280' }}>
+          不填写则仅做基础格式检查，填写后可按要求逐项核查。
+        </div>
+      </Modal>
+
+      {/* 废标检查结果 Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <SafetyCertificateOutlined style={{ color: '#d97706' }} />
+            废标检查报告
+          </Space>
+        }
+        placement="right"
+        width={640}
+        open={checkDrawerOpen}
+        onClose={() => setCheckDrawerOpen(false)}
+      >
+        {checkLoading ? (
+          <div style={{ textAlign: 'center', padding: 80 }}>
+            <Spin size="large" tip="正在检查中，请稍候..." />
+          </div>
+        ) : checkResult ? (
+          <div>
+            {/* 顶部总分 */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 32,
+              padding: '24px 0',
+              borderBottom: '1px solid #e2e8f0',
+              marginBottom: 24,
+              justifyContent: 'center',
+            }}>
+              <Progress
+                type="circle"
+                percent={checkResult.score}
+                size={100}
+                strokeColor={checkResult.score >= 80 ? '#22c55e' : checkResult.score >= 60 ? '#f59e0b' : '#ef4444'}
+                format={(pct) => <span style={{ fontSize: 22, fontWeight: 700 }}>{pct}</span>}
+              />
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#0f172a' }}>综合评分</div>
+                <Tag
+                  color={checkResult.pass ? 'success' : 'error'}
+                  style={{ fontSize: 14, padding: '4px 12px' }}
+                >
+                  {checkResult.pass ? '通过' : '未通过'}
+                </Tag>
+                {checkResult.missing_sections && checkResult.missing_sections.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#ef4444' }}>
+                    缺失章节：{checkResult.missing_sections.join('、')}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 检查项列表 */}
+            <List
+              dataSource={checkResult.items}
+              renderItem={(item) => {
+                const statusIcon =
+                  item.status === 'PASS' ? <CheckCircleFilled style={{ color: '#22c55e', fontSize: 16 }} /> :
+                  item.status === 'WARN' ? <WarningFilled style={{ color: '#f59e0b', fontSize: 16 }} /> :
+                  <CloseCircleFilled style={{ color: '#ef4444', fontSize: 16 }} />;
+                return (
+                  <List.Item style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+                    <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                      <div style={{ marginTop: 2, flexShrink: 0 }}>{statusIcon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{item.requirement}</div>
+                        <div style={{ fontSize: 13, color: '#475569', marginBottom: item.suggestion ? 6 : 0 }}>{item.detail}</div>
+                        {item.suggestion && (
+                          <div style={{
+                            fontSize: 12,
+                            color: '#6d28d9',
+                            background: '#f5f3ff',
+                            padding: '6px 10px',
+                            borderRadius: 4,
+                            borderLeft: '3px solid #8b5cf6',
+                          }}>
+                            建议：{item.suggestion}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </List.Item>
+                );
+              }}
+            />
+
+            {/* 风险警告 */}
+            {checkResult.risk_warnings && checkResult.risk_warnings.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>风险警告</div>
+                {checkResult.risk_warnings.map((w, i) => (
+                  <div key={i} style={{
+                    padding: '8px 12px',
+                    background: '#fef2f2',
+                    borderRadius: 4,
+                    borderLeft: '3px solid #ef4444',
+                    marginBottom: 6,
+                    fontSize: 13,
+                    color: '#7f1d1d',
+                  }}>
+                    {w}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <Empty description="暂无检查结果" />
+        )}
       </Drawer>
     </div>
   );
