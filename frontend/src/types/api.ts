@@ -186,6 +186,25 @@ interface TenderStats {
   opened: number;
 }
 
+/** 开标记录 */
+interface BidOpening {
+  id: number;
+  tender_id: number;
+  tender_title?: string;
+  tender_no?: string;
+  opening_time?: string;
+  result?: string;
+  our_price?: number;
+  win_price?: number;
+  win_company?: string;
+  total_bidders?: number;
+  ranking?: number;
+  review_summary?: string;
+  lessons_learned?: string;
+  remark?: string;
+  created_at?: string;
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;
