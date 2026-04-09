@@ -93,3 +93,36 @@ BidSectionResponse.model_rebuild()
 
 class ReorderSectionsRequest(BaseModel):
     section_ids: List[int] = Field(...)
+
+
+# ========== AI 功能 ==========
+
+class AIGenerateRequest(BaseModel):
+    tender_requirements: Optional[str] = Field(default=None, description="该章节对应的招标要求（可选）")
+    additional_context: Optional[str] = Field(default=None, description="额外上下文/要求（可选）")
+
+
+class AIGenerateResponse(BaseModel):
+    generated_content: str
+
+
+class BidCheckItem(BaseModel):
+    category: Optional[str] = None
+    requirement: Optional[str] = None
+    status: str  # PASS / WARN / FAIL / WARNING
+    detail: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+class BidCheckRequest(BaseModel):
+    tender_requirements: Optional[str] = Field(default=None, description="招标要求文本（可选）")
+
+
+class BidCheckResponse(BaseModel):
+    overall_score: int = 0
+    pass_: bool = Field(default=True, alias="pass")
+    items: List[BidCheckItem] = []
+    missing_sections: List[str] = []
+    risk_warnings: List[str] = []
+
+    model_config = {"populate_by_name": True}
