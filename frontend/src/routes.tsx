@@ -16,6 +16,10 @@ const TenderForm = lazy(() => import('@/pages/Tender/Form'));
 const TenderCalendar = lazy(() => import('@/pages/Tender/Calendar'));
 const Decision = lazy(() => import('@/pages/Decision'));
 const Opening = lazy(() => import('@/pages/Opening'));
+const Qualification = lazy(() => import('@/pages/Library/Qualification'));
+const Achievement = lazy(() => import('@/pages/Library/Achievement'));
+const PersonnelCert = lazy(() => import('@/pages/Library/PersonnelCert'));
+const ProductPage = lazy(() => import('@/pages/Library/Product'));
 
 export default function AppRoutes() {
   return (
@@ -32,6 +36,10 @@ export default function AppRoutes() {
           <Route path="/tender/:id" element={<TenderForm />} />
           <Route path="/decision/list" element={<Decision />} />
           <Route path="/opening/list" element={<Opening />} />
+          <Route path="/library/qualification" element={<Qualification />} />
+          <Route path="/library/achievement" element={<Achievement />} />
+          <Route path="/library/personnel-cert" element={<PersonnelCert />} />
+          <Route path="/library/product" element={<ProductPage />} />
           <Route path="/workflow" element={<Workflow />} />
           <Route path="/system/department" element={<Department />} />
           <Route path="/system/user" element={<User />} />
