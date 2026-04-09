@@ -18,6 +18,7 @@ import {
   TrophyOutlined,
   BankOutlined,
   FormOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 
 import useAuthStore from '@/stores/useAuthStore';
@@ -58,6 +59,7 @@ const menuItems = [
       { key: '/bid/list', label: '标书列表' },
     ],
   },
+  { key: '/knowledge/list', icon: <BookOutlined />, label: '知识库' },
   { key: '/workflow', icon: <AuditOutlined />, label: '审批中心' },
   {
     key: '/system',
