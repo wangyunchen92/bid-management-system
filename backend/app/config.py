@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
 
+    # AI 配置（火山引擎/豆包）
+    AI_API_KEY: str = "46813e98-c5d7-4979-9875-81d6aa3b4243"
+    AI_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    AI_MODEL: str = "doubao-seed-1-6-251015"
+
     @property
     def DATABASE_URL(self) -> str:
         if self.DB_TYPE == "sqlite":
