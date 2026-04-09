@@ -3,17 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, message, Empty, Spin,
-  Tooltip, Dropdown, Card,
+  Tooltip, Dropdown, Card, Collapse,
 } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection,
 } from '@/services/bid';
 import { getUserList } from '@/services/system';
+import TenderDocParser from '@/components/TenderDocParser';
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -457,15 +459,66 @@ export default function BidWorkbenchPage() {
       <Layout style={{ flex: 1, overflow: 'hidden', borderRadius: '0 0 8px 8px', background: '#fff' }}>
         {/* 左侧章节树 */}
         <Sider
-          width={280}
+          width={300}
           style={{
             background: '#f8fafc',
             borderRight: '1px solid #e2e8f0',
             overflow: 'auto',
-            padding: '16px 0',
+            padding: '0',
           }}
         >
-          <div style={{ padding: '0 12px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* 招标文件解析区域 */}
+          <Collapse
+            ghost
+            size="small"
+            style={{ borderBottom: '1px solid #e2e8f0', borderRadius: 0 }}
+            items={[
+              {
+                key: 'tender-doc',
+                label: (
+                  <Space size={6}>
+                    <FileSearchOutlined style={{ color: '#0d9488' }} />
+                    <Text strong style={{ fontSize: 13, color: '#475569' }}>招标文件解析</Text>
+                  </Space>
+                ),
+                children: (
+                  <div style={{ padding: '0 4px 8px' }}>
+                    <TenderDocParser
+                      projectId={project?.id}
+                      tenderId={project?.tender_id}
+                      onParseComplete={(result) => {
+                        if (result.bid_document_requirements?.chapters && result.bid_document_requirements.chapters.length > 0) {
+                          Modal.confirm({
+                            title: '自动生成章节',
+                            content: `解析到 ${result.bid_document_requirements.chapters.length} 个章节建议：${result.bid_document_requirements.chapters.slice(0, 5).join('、')}${result.bid_document_requirements.chapters.length > 5 ? ' 等' : ''}。是否自动生成章节？`,
+                            okText: '自动生成',
+                            cancelText: '暂不',
+                            onOk: async () => {
+                              try {
+                                for (let i = 0; i < result.bid_document_requirements!.chapters!.length; i++) {
+                                  await createSection({
+                                    project_id: projectId,
+                                    title: result.bid_document_requirements!.chapters![i],
+                                    sort_order: i + 1,
+                                  });
+                                }
+                                message.success(`已生成 ${result.bid_document_requirements!.chapters!.length} 个章节`);
+                                await loadSections();
+                              } catch {
+                                message.error('章节生成失败');
+                              }
+                            },
+                          });
+                        }
+                      }}
+                    />
+                  </div>
+                ),
+              },
+            ]}
+          />
+
+          <div style={{ padding: '12px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text strong style={{ fontSize: 13, color: '#475569' }}>章节目录</Text>
             <Tooltip title="新增根章节">
               <Button
