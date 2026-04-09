@@ -366,6 +366,33 @@ interface BidCheckResult {
   risk_warnings?: string[];
 }
 
+/** 仪表盘统计 */
+interface DashboardStats {
+  cards: {
+    active_tenders: number;
+    win_count_year: number;
+    win_rate: number;
+    expiring_7days: number;
+  };
+  status_distribution: { status: string; label: string; count: number }[];
+  monthly_trend: { month: string; bid_count: number; win_count: number }[];
+  expiring_list: { id: number; title: string; deadline_type: string; deadline: string; days_left: number }[];
+  pending_approvals: { id: number; title: string; initiator_name: string; created_at: string }[];
+}
+
+/** 知识库模板 */
+interface KnowledgeTemplate {
+  id: number;
+  title: string;
+  category?: string;
+  content?: string;
+  source_project_id?: number;
+  tags?: string;
+  usage_count: number;
+  remark?: string;
+  created_at?: string;
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;

@@ -120,6 +120,19 @@ export const TENDER_DOC_API = {
   SAVE_TO_TENDER: (id: number) => `${API_PREFIX}/tender-doc/${id}/save-to-tender`,
 } as const;
 
+export const DASHBOARD_API = {
+  STATS: `${API_PREFIX}/dashboard/stats`,
+} as const;
+
+export const KNOWLEDGE_API = {
+  LIST: `${API_PREFIX}/knowledge/list`,
+  CREATE: `${API_PREFIX}/knowledge`,
+  DETAIL: (id: number) => `${API_PREFIX}/knowledge/${id}`,
+  UPDATE: (id: number) => `${API_PREFIX}/knowledge/${id}`,
+  DELETE: (id: number) => `${API_PREFIX}/knowledge/${id}`,
+  SEARCH: `${API_PREFIX}/knowledge/search`,
+} as const;
+
 export const TENDER_API = {
   LIST: `${API_PREFIX}/tender/list`,
   CREATE: `${API_PREFIX}/tender`,
