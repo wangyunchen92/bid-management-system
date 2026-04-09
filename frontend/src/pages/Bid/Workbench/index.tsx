@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, message, Empty, Spin,
-  Tooltip, Dropdown, Card, Collapse,
+  Tooltip, Dropdown, Card, Drawer,
 } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
@@ -199,6 +199,7 @@ export default function BidWorkbenchPage() {
   const [selectedSection, setSelectedSection] = useState<BidSection | null>(null);
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingTree, setLoadingTree] = useState(false);
+  const [parseDrawerOpen, setParseDrawerOpen] = useState(false);
 
   // 编辑器状态
   const [editTitle, setEditTitle] = useState('');
@@ -467,56 +468,18 @@ export default function BidWorkbenchPage() {
             padding: '0',
           }}
         >
-          {/* 招标文件解析区域 */}
-          <Collapse
-            ghost
-            size="small"
-            style={{ borderBottom: '1px solid #e2e8f0', borderRadius: 0 }}
-            items={[
-              {
-                key: 'tender-doc',
-                label: (
-                  <Space size={6}>
-                    <FileSearchOutlined style={{ color: '#0d9488' }} />
-                    <Text strong style={{ fontSize: 13, color: '#475569' }}>招标文件解析</Text>
-                  </Space>
-                ),
-                children: (
-                  <div style={{ padding: '0 4px 8px' }}>
-                    <TenderDocParser
-                      projectId={project?.id}
-                      tenderId={project?.tender_id}
-                      onParseComplete={(result) => {
-                        if (result.bid_document_requirements?.chapters && result.bid_document_requirements.chapters.length > 0) {
-                          Modal.confirm({
-                            title: '自动生成章节',
-                            content: `解析到 ${result.bid_document_requirements.chapters.length} 个章节建议：${result.bid_document_requirements.chapters.slice(0, 5).join('、')}${result.bid_document_requirements.chapters.length > 5 ? ' 等' : ''}。是否自动生成章节？`,
-                            okText: '自动生成',
-                            cancelText: '暂不',
-                            onOk: async () => {
-                              try {
-                                for (let i = 0; i < result.bid_document_requirements!.chapters!.length; i++) {
-                                  await createSection({
-                                    project_id: projectId,
-                                    title: result.bid_document_requirements!.chapters![i],
-                                    sort_order: i + 1,
-                                  });
-                                }
-                                message.success(`已生成 ${result.bid_document_requirements!.chapters!.length} 个章节`);
-                                await loadSections();
-                              } catch {
-                                message.error('章节生成失败');
-                              }
-                            },
-                          });
-                        }
-                      }}
-                    />
-                  </div>
-                ),
-              },
-            ]}
-          />
+          {/* 招标文件解析按钮 */}
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0' }}>
+            <Button
+              type="dashed"
+              block
+              icon={<FileSearchOutlined />}
+              onClick={() => setParseDrawerOpen(true)}
+              style={{ color: '#0d9488', borderColor: '#0d9488' }}
+            >
+              招标文件解析
+            </Button>
+          </div>
 
           <div style={{ padding: '12px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text strong style={{ fontSize: 13, color: '#475569' }}>章节目录</Text>
@@ -674,6 +637,46 @@ export default function BidWorkbenchPage() {
         onOk={handleEditTitle}
         onCancel={() => setEditTitleOpen(false)}
       />
+
+      {/* 招标文件解析 Drawer */}
+      <Drawer
+        title="招标文件智能解析"
+        placement="right"
+        width={720}
+        open={parseDrawerOpen}
+        onClose={() => setParseDrawerOpen(false)}
+      >
+        <TenderDocParser
+          projectId={project?.id}
+          tenderId={project?.tender_id}
+          onParseComplete={(result) => {
+            if (result.bid_document_requirements?.chapters && result.bid_document_requirements.chapters.length > 0) {
+              Modal.confirm({
+                title: '自动生成章节',
+                content: `解析到 ${result.bid_document_requirements.chapters.length} 个章节建议：${result.bid_document_requirements.chapters.slice(0, 5).join('、')}${result.bid_document_requirements.chapters.length > 5 ? ' 等' : ''}。是否自动生成章节？`,
+                okText: '自动生成',
+                cancelText: '暂不',
+                onOk: async () => {
+                  try {
+                    for (let i = 0; i < result.bid_document_requirements!.chapters!.length; i++) {
+                      await createSection({
+                        project_id: projectId,
+                        title: result.bid_document_requirements!.chapters![i],
+                        sort_order: i + 1,
+                      });
+                    }
+                    message.success(`已生成 ${result.bid_document_requirements!.chapters!.length} 个章节`);
+                    await loadSections();
+                    setParseDrawerOpen(false);
+                  } catch {
+                    message.error('章节生成失败');
+                  }
+                },
+              });
+            }
+          }}
+        />
+      </Drawer>
     </div>
   );
 }
