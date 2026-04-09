@@ -107,6 +107,14 @@ export const BID_API = {
   SECTION_REORDER: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/sections/reorder`,
 } as const;
 
+export const TENDER_DOC_API = {
+  UPLOAD: `${API_PREFIX}/tender-doc/upload`,
+  DETAIL: (id: number) => `${API_PREFIX}/tender-doc/${id}`,
+  BY_PROJECT: (projectId: number) => `${API_PREFIX}/tender-doc/by-project/${projectId}`,
+  BY_TENDER: (tenderId: number) => `${API_PREFIX}/tender-doc/by-tender/${tenderId}`,
+  DELETE: (id: number) => `${API_PREFIX}/tender-doc/${id}`,
+} as const;
+
 export const TENDER_API = {
   LIST: `${API_PREFIX}/tender/list`,
   CREATE: `${API_PREFIX}/tender`,

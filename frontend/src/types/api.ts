@@ -290,6 +290,64 @@ interface BidSection {
   children?: BidSection[];
 }
 
+/** 招标文件解析结果 */
+interface TenderDocumentInfo {
+  id: number;
+  project_id?: number;
+  tender_id?: number;
+  original_name: string;
+  file_size: number;
+  file_type: string;
+  page_count?: number;
+  parse_status: 'PENDING' | 'EXTRACTING' | 'PARSING' | 'COMPLETED' | 'FAILED';
+  parse_result?: TenderParseResult;
+  error_message?: string;
+  created_at?: string;
+}
+
+interface TenderParseResult {
+  basic_info?: {
+    project_name?: string;
+    tender_no?: string;
+    tender_unit?: string;
+    agent_unit?: string;
+    tender_method?: string;
+    budget_amount?: number;
+    budget_amount_text?: string;
+  };
+  timeline?: {
+    publish_date?: string;
+    question_deadline?: string;
+    bid_deadline?: string;
+    open_bid_time?: string;
+    open_bid_place?: string;
+    deposit_amount?: number;
+    deposit_amount_text?: string;
+    deposit_deadline?: string;
+  };
+  qualification?: {
+    required_certs?: string[];
+    required_experience?: string;
+    team_requirements?: string;
+    financial_requirements?: string;
+    exclusion_conditions?: string[];
+  };
+  scoring?: {
+    method?: string;
+    technical_score?: number;
+    commercial_score?: number;
+    price_score?: number;
+    details?: { category?: string; item?: string; max_score?: number; criteria?: string }[];
+  };
+  bid_document_requirements?: {
+    format?: string;
+    copies?: string;
+    seal_requirements?: string;
+    chapters?: string[];
+  };
+  risk_alerts?: string[];
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;
