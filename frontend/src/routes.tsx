@@ -11,6 +11,9 @@ const Dict = lazy(() => import('@/pages/System/Dict'));
 const Department = lazy(() => import('@/pages/System/Department'));
 const User = lazy(() => import('@/pages/System/User'));
 const Role = lazy(() => import('@/pages/System/Role'));
+const TenderList = lazy(() => import('@/pages/Tender/List'));
+const TenderForm = lazy(() => import('@/pages/Tender/Form'));
+const TenderCalendar = lazy(() => import('@/pages/Tender/Calendar'));
 
 export default function AppRoutes() {
   return (
@@ -21,6 +24,10 @@ export default function AppRoutes() {
         </Route>
         <Route element={<BasicLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/tender/list" element={<TenderList />} />
+          <Route path="/tender/create" element={<TenderForm />} />
+          <Route path="/tender/calendar" element={<TenderCalendar />} />
+          <Route path="/tender/:id" element={<TenderForm />} />
           <Route path="/workflow" element={<Workflow />} />
           <Route path="/system/department" element={<Department />} />
           <Route path="/system/user" element={<User />} />

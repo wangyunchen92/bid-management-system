@@ -13,6 +13,7 @@ import {
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,
   AuditOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons';
 
 import useAuthStore from '@/stores/useAuthStore';
@@ -23,6 +24,15 @@ const { Text } = Typography;
 
 const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
+  {
+    key: '/tender',
+    icon: <FileSearchOutlined />,
+    label: '招标管理',
+    children: [
+      { key: '/tender/list', label: '招标列表' },
+      { key: '/tender/calendar', label: '日历视图' },
+    ],
+  },
   { key: '/workflow', icon: <AuditOutlined />, label: '审批中心' },
   {
     key: '/system',
