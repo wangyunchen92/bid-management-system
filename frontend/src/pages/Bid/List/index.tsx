@@ -98,7 +98,7 @@ function ProjectFormModal({ open, mode, initialValues, onOk, onCancel }: Project
       confirmLoading={loading}
       width={620}
       okText={mode === 'create' ? '创建' : '保存'}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ maxHeight: '65vh', overflowY: 'auto', paddingRight: 8 }}>
         <Form.Item name="title" label="标书标题" rules={[{ required: true, message: '请输入标书标题' }]}>

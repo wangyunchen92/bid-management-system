@@ -120,7 +120,7 @@ function AddSectionModal({ open, projectId, sections, defaultParentId, onOk, onC
       confirmLoading={loading}
       width={480}
       okText="创建"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical">
         <Form.Item name="title" label="章节标题" rules={[{ required: true, message: '请输入章节标题' }]}>
@@ -179,7 +179,7 @@ function EditTitleModal({ open, section, onOk, onCancel }: EditTitleModalProps) 
       confirmLoading={loading}
       width={400}
       okText="保存"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical">
         <Form.Item name="title" label="章节标题" rules={[{ required: true, message: '请输入章节标题' }]}>
@@ -821,7 +821,7 @@ export default function BidWorkbenchPage() {
         okText="开始生成"
         okButtonProps={{ style: { background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none' } }}
         width={520}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>招标要求（可选）</div>
@@ -917,7 +917,7 @@ export default function BidWorkbenchPage() {
         okText="开始检查"
         okButtonProps={{ style: { background: 'linear-gradient(135deg, #d97706, #f59e0b)', border: 'none' } }}
         width={480}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>招标要求（可选）</div>
         <TextArea

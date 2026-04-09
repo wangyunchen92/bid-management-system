@@ -138,7 +138,7 @@ export default function AchievementPage() {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSubmit}
-        destroyOnClose
+        destroyOnHidden
         width={560}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>

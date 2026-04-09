@@ -161,7 +161,7 @@ export default function DepartmentPage() {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSubmit}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="dept_name" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>

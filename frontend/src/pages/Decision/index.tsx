@@ -97,7 +97,7 @@ function DecisionForm({ open, mode, initialValues, onOk, onCancel }: DecisionFor
       confirmLoading={loading}
       width={680}
       okText={mode === 'create' ? '创建' : '保存'}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ maxHeight: '65vh', overflowY: 'auto', paddingRight: 8 }}>
         <Form.Item name="tender_id" label="招标项目" rules={[{ required: true, message: '请选择招标项目' }]}>
@@ -224,7 +224,7 @@ function DetailModal({ open, record, onClose }: DetailModalProps) {
       onCancel={onClose}
       footer={<Button onClick={onClose}>关闭</Button>}
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
         <Descriptions.Item label="招标项目" span={2}>

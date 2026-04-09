@@ -131,7 +131,7 @@ export default function ProductPage() {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSubmit}
-        destroyOnClose
+        destroyOnHidden
         width={520}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>

@@ -192,7 +192,7 @@ export default function DictPage() {
         )}
       </Card>
 
-      <Modal title={editingType ? '编辑字典类型' : '新增字典类型'} open={typeModalOpen} onCancel={() => setTypeModalOpen(false)} onOk={handleTypeSubmit} destroyOnClose>
+      <Modal title={editingType ? '编辑字典类型' : '新增字典类型'} open={typeModalOpen} onCancel={() => setTypeModalOpen(false)} onOk={handleTypeSubmit} destroyOnHidden>
         <Form form={typeForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="dict_name" label="类型名称" rules={[{ required: true, message: '请输入类型名称' }]}>
             <Input placeholder="如：招标方式" />
@@ -209,7 +209,7 @@ export default function DictPage() {
         </Form>
       </Modal>
 
-      <Modal title={editingItem ? '编辑字典项' : '新增字典项'} open={itemModalOpen} onCancel={() => setItemModalOpen(false)} onOk={handleItemSubmit} destroyOnClose>
+      <Modal title={editingItem ? '编辑字典项' : '新增字典项'} open={itemModalOpen} onCancel={() => setItemModalOpen(false)} onOk={handleItemSubmit} destroyOnHidden>
         <Form form={itemForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="item_label" label="显示标签" rules={[{ required: true, message: '请输入显示标签' }]}>
             <Input placeholder="如：公开招标" />

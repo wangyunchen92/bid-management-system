@@ -84,7 +84,7 @@ function OpeningForm({ open, mode, initialValues, onOk, onCancel }: OpeningFormP
       confirmLoading={loading}
       width={680}
       okText={mode === 'create' ? '创建' : '保存'}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ maxHeight: '65vh', overflowY: 'auto', paddingRight: 8 }}>
         <Form.Item name="tender_id" label="招标项目" rules={[{ required: true, message: '请选择招标项目' }]}>
@@ -203,7 +203,7 @@ function ReviewForm({ open, initialValues, onOk, onCancel }: ReviewFormProps) {
       confirmLoading={loading}
       width={600}
       okText="保存"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical">
         <Form.Item name="review_summary" label="复盘总结">
@@ -246,7 +246,7 @@ function DetailModal({ open, record, onClose, onEditReview }: DetailModalProps) 
         </Space>
       }
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Descriptions column={2} bordered size="small" style={{ marginBottom: 16 }}>
         <Descriptions.Item label="招标项目" span={2}>

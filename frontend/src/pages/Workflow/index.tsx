@@ -177,7 +177,7 @@ export default function WorkflowPage() {
         open={!!actionModal}
         onCancel={() => setActionModal(null)}
         onOk={handleActionSubmit}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={actionForm} layout="vertical" style={{ marginTop: 16 }}>
           {actionModal?.type === 'transfer' && (

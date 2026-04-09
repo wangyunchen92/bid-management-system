@@ -87,7 +87,8 @@
       "Bash(pip list:*)",
       "Bash(pip3 list:*)",
       "Bash(echo \"Server PID: $!\" sleep 4 curl -s http://127.0.0.1:8002/health)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(grep -n \"error\\\\|500\\\\|404\\\\|422\\\\|traceback\" /private/tmp/claude-501/-Users-wangyunchen-agents-----/c422d1e7-a637-46b5-aa58-e82dc332aea7/tasks/*.output)"
     ]
   }
 }
