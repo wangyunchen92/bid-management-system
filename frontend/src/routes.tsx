@@ -20,6 +20,8 @@ const Qualification = lazy(() => import('@/pages/Library/Qualification'));
 const Achievement = lazy(() => import('@/pages/Library/Achievement'));
 const PersonnelCert = lazy(() => import('@/pages/Library/PersonnelCert'));
 const ProductPage = lazy(() => import('@/pages/Library/Product'));
+const BidList = lazy(() => import('@/pages/Bid/List'));
+const BidWorkbench = lazy(() => import('@/pages/Bid/Workbench'));
 
 export default function AppRoutes() {
   return (
@@ -40,6 +42,8 @@ export default function AppRoutes() {
           <Route path="/library/achievement" element={<Achievement />} />
           <Route path="/library/personnel-cert" element={<PersonnelCert />} />
           <Route path="/library/product" element={<ProductPage />} />
+          <Route path="/bid/list" element={<BidList />} />
+          <Route path="/bid/:id" element={<BidWorkbench />} />
           <Route path="/workflow" element={<Workflow />} />
           <Route path="/system/department" element={<Department />} />
           <Route path="/system/user" element={<User />} />
