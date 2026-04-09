@@ -205,6 +205,60 @@ interface BidOpening {
   created_at?: string;
 }
 
+/** 资质证书 */
+interface Qualification {
+  id: number;
+  cert_name: string;
+  cert_type?: string;
+  cert_no?: string;
+  issuing_authority?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  status: number;
+  remark?: string;
+  created_at?: string;
+}
+
+/** 业绩案例 */
+interface Achievement {
+  id: number;
+  project_name: string;
+  client_name?: string;
+  contract_amount?: number;
+  completion_date?: string;
+  project_type?: string;
+  description?: string;
+  remark?: string;
+  created_at?: string;
+}
+
+/** 人员证书 */
+interface PersonnelCert {
+  id: number;
+  person_name: string;
+  cert_name: string;
+  cert_no?: string;
+  cert_type?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  status: number;
+  remark?: string;
+  created_at?: string;
+}
+
+/** 产品/设备 */
+interface Product {
+  id: number;
+  name: string;
+  model?: string;
+  brand?: string;
+  quantity: number;
+  unit?: string;
+  description?: string;
+  remark?: string;
+  created_at?: string;
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;

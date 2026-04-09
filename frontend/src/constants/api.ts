@@ -67,6 +67,29 @@ export const OPENING_API = {
   BY_TENDER: (tenderId: number) => `${API_PREFIX}/opening/by-tender/${tenderId}`,
 } as const;
 
+export const LIBRARY_API = {
+  // 资质证书
+  QUAL_LIST: `${API_PREFIX}/library/qualifications`,
+  QUAL_CREATE: `${API_PREFIX}/library/qualifications`,
+  QUAL_UPDATE: (id: number) => `${API_PREFIX}/library/qualifications/${id}`,
+  QUAL_DELETE: (id: number) => `${API_PREFIX}/library/qualifications/${id}`,
+  // 业绩案例
+  ACHV_LIST: `${API_PREFIX}/library/achievements`,
+  ACHV_CREATE: `${API_PREFIX}/library/achievements`,
+  ACHV_UPDATE: (id: number) => `${API_PREFIX}/library/achievements/${id}`,
+  ACHV_DELETE: (id: number) => `${API_PREFIX}/library/achievements/${id}`,
+  // 人员证书
+  PCERT_LIST: `${API_PREFIX}/library/personnel-certs`,
+  PCERT_CREATE: `${API_PREFIX}/library/personnel-certs`,
+  PCERT_UPDATE: (id: number) => `${API_PREFIX}/library/personnel-certs/${id}`,
+  PCERT_DELETE: (id: number) => `${API_PREFIX}/library/personnel-certs/${id}`,
+  // 产品/设备
+  PROD_LIST: `${API_PREFIX}/library/products`,
+  PROD_CREATE: `${API_PREFIX}/library/products`,
+  PROD_UPDATE: (id: number) => `${API_PREFIX}/library/products/${id}`,
+  PROD_DELETE: (id: number) => `${API_PREFIX}/library/products/${id}`,
+} as const;
+
 export const TENDER_API = {
   LIST: `${API_PREFIX}/tender/list`,
   CREATE: `${API_PREFIX}/tender`,
