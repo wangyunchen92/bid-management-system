@@ -150,6 +150,24 @@ class TenderDocService:
         basic = parse_result.get("basic_info", {})
         timeline = parse_result.get("timeline", {})
 
+        def parse_datetime(s):
+            """将字符串转为 datetime 对象，SQLite 需要"""
+            if not s:
+                return None
+            from dateutil import parser as dateutil_parser
+            try:
+                return dateutil_parser.parse(s)
+            except Exception:
+                # 尝试常见中文日期格式
+                import re
+                m = re.search(r'(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?\s*(\d{1,2})?[:]?(\d{1,2})?', s)
+                if m:
+                    parts = [int(x) for x in m.groups() if x]
+                    while len(parts) < 5:
+                        parts.append(0)
+                    return datetime(parts[0], parts[1], parts[2], parts[3], parts[4])
+                return None
+
         # 构建招标信息数据
         tender_data = {}
         if basic.get("project_name"):
@@ -159,19 +177,24 @@ class TenderDocService:
         if basic.get("tender_unit"):
             tender_data["tender_unit"] = basic["tender_unit"]
         if basic.get("tender_method"):
-            # 转换为字典值
             method_map = {"公开招标": "PUBLIC", "邀请招标": "INVITE", "竞争性谈判": "NEGOTIATE", "询价": "INQUIRY", "单一来源": "SINGLE"}
             tender_data["tender_method"] = method_map.get(basic["tender_method"], basic["tender_method"])
         if basic.get("budget_amount") is not None:
             tender_data["budget_amount"] = basic["budget_amount"]
         if timeline.get("bid_deadline"):
-            tender_data["reg_deadline"] = timeline["bid_deadline"]
+            dt = parse_datetime(timeline["bid_deadline"])
+            if dt:
+                tender_data["reg_deadline"] = dt
         if timeline.get("open_bid_time"):
-            tender_data["open_bid_time"] = timeline["open_bid_time"]
+            dt = parse_datetime(timeline["open_bid_time"])
+            if dt:
+                tender_data["open_bid_time"] = dt
         if timeline.get("deposit_amount") is not None:
             tender_data["deposit_amount"] = timeline["deposit_amount"]
         if timeline.get("deposit_deadline"):
-            tender_data["deposit_deadline"] = timeline["deposit_deadline"]
+            dt = parse_datetime(timeline["deposit_deadline"])
+            if dt:
+                tender_data["deposit_deadline"] = dt
 
         if doc.tender_id:
             # 更新已有招标信息
