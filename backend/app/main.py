@@ -92,13 +92,14 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # 注册路由
-from app.routers import auth, system, approval, tender, decision
+from app.routers import auth, system, approval, tender, decision, opening
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证管理"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["系统管理"])
 app.include_router(approval.router, prefix="/api/v1/approval", tags=["审批管理"])
 app.include_router(tender.router, prefix="/api/v1/tender", tags=["招标管理"])
 app.include_router(decision.router, prefix="/api/v1/decision", tags=["投标决策"])
+app.include_router(opening.router, prefix="/api/v1/opening", tags=["开标跟踪"])
 
 
 @app.get("/api/health", tags=["健康检查"])
