@@ -1,0 +1,175 @@
+import { useEffect, useState, useCallback } from 'react';
+import {
+  Card, Table, Button, Modal, Form, Input, InputNumber, DatePicker,
+  Space, message, Popconfirm,
+} from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import {
+  getAchievementList,
+  createAchievement,
+  updateAchievement,
+  deleteAchievement,
+} from '@/services/library';
+
+export default function AchievementPage() {
+  const [data, setData] = useState<Achievement[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Achievement | null>(null);
+  const [form] = Form.useForm();
+
+  const load = useCallback(async (p = page, kw = keyword) => {
+    setLoading(true);
+    try {
+      const res = await getAchievementList({ page: p, page_size: 10, keyword: kw || undefined });
+      setData(res.data.items);
+      setTotal(res.data.total);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, keyword]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSearch = () => { setPage(1); load(1, keyword); };
+
+  const handleCreate = () => {
+    setEditing(null);
+    form.resetFields();
+    setModalOpen(true);
+  };
+
+  const handleEdit = (record: Achievement) => {
+    setEditing(record);
+    form.setFieldsValue({
+      ...record,
+      completion_date: record.completion_date ? dayjs(record.completion_date) : undefined,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    const payload = {
+      ...values,
+      completion_date: values.completion_date ? values.completion_date.format('YYYY-MM-DD') : undefined,
+    };
+    if (editing) {
+      await updateAchievement(editing.id, payload);
+      message.success('更新成功');
+    } else {
+      await createAchievement(payload);
+      message.success('创建成功');
+    }
+    setModalOpen(false);
+    load(page, keyword);
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteAchievement(id);
+      message.success('删除成功');
+      load(page, keyword);
+    } catch { /* handled */ }
+  };
+
+  const columns = [
+    { title: '项目名称', dataIndex: 'project_name', key: 'project_name', ellipsis: true },
+    { title: '甲方', dataIndex: 'client_name', key: 'client_name', ellipsis: true, width: 160 },
+    {
+      title: '合同金额(万元)', dataIndex: 'contract_amount', key: 'contract_amount', width: 140, align: 'right' as const,
+      render: (v?: number) => v != null ? v.toFixed(4) : '-',
+    },
+    { title: '完成时间', dataIndex: 'completion_date', key: 'completion_date', width: 120 },
+    { title: '项目类型', dataIndex: 'project_type', key: 'project_type', width: 120 },
+    {
+      title: '操作', key: 'action', width: 100,
+      render: (_: unknown, record: Achievement) => (
+        <Space size="small">
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <Card
+      title="业绩案例"
+      extra={
+        <Space>
+          <Input
+            placeholder="搜索项目名称"
+            prefix={<SearchOutlined />}
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            onPressEnter={handleSearch}
+            allowClear
+            style={{ width: 220 }}
+          />
+          <Button onClick={handleSearch}>搜索</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新增案例</Button>
+        </Space>
+      }
+    >
+      <Table
+        dataSource={data}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+        size="middle"
+        pagination={{
+          total,
+          current: page,
+          pageSize: 10,
+          onChange: (p) => { setPage(p); load(p, keyword); },
+          showTotal: t => `共 ${t} 条`,
+        }}
+      />
+
+      <Modal
+        title={editing ? '编辑案例' : '新增案例'}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onOk={handleSubmit}
+        destroyOnClose
+        width={560}
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="project_name" label="项目名称" rules={[{ required: true, message: '请输入项目名称' }]}>
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
+          <Form.Item name="client_name" label="甲方">
+            <Input placeholder="请输入甲方名称" />
+          </Form.Item>
+          <Form.Item name="contract_amount" label="合同金额(万元)">
+            <InputNumber
+              precision={4}
+              min={0}
+              style={{ width: '100%' }}
+              placeholder="请输入合同金额"
+            />
+          </Form.Item>
+          <Form.Item name="completion_date" label="完成时间">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="project_type" label="项目类型">
+            <Input placeholder="如：IT系统、工程建设、广告印刷" />
+          </Form.Item>
+          <Form.Item name="description" label="项目简介">
+            <Input.TextArea rows={3} placeholder="简要描述项目背景和亮点" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="备注信息" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Card>
+  );
+}
