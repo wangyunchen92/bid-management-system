@@ -1,4 +1,4 @@
-import { get, del } from '@/utils/request';
+import { get, post, del } from '@/utils/request';
 import { TENDER_DOC_API } from '@/constants/api';
 import request from '@/utils/request';
 
@@ -29,4 +29,8 @@ export function getTenderDocsByTender(tenderId: number) {
 
 export function deleteTenderDoc(id: number) {
   return del(TENDER_DOC_API.DELETE(id));
+}
+
+export function saveToTender(docId: number) {
+  return post<{ tender_id: number; action: string; fields_updated: string[] }>(TENDER_DOC_API.SAVE_TO_TENDER(docId));
 }

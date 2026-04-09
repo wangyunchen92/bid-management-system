@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.exceptions import BusinessException, NotFoundException
 from app.config import settings
+from app.models.tender import Tender
 from app.models.tender_document import TenderDocument
 from app.services.document_parser import document_parser
 from app.services.tender_ai_parser import tender_ai_parser
@@ -133,6 +134,73 @@ class TenderDocService:
         doc.is_deleted = 1
         doc.updated_by = user_id
         await db.flush()
+
+    async def save_to_tender(self, db: AsyncSession, doc_id: int, user_id: int) -> dict:
+        """将解析结果保存到招标信息（更新已有或创建新的）"""
+        result = await db.execute(
+            select(TenderDocument).where(TenderDocument.id == doc_id, TenderDocument.is_deleted == 0)
+        )
+        doc = result.scalar_one_or_none()
+        if doc is None:
+            raise NotFoundException("文档不存在")
+        if doc.parse_status != "COMPLETED" or not doc.parse_result:
+            raise BusinessException("文档尚未解析完成")
+
+        parse_result = json.loads(doc.parse_result)
+        basic = parse_result.get("basic_info", {})
+        timeline = parse_result.get("timeline", {})
+
+        # 构建招标信息数据
+        tender_data = {}
+        if basic.get("project_name"):
+            tender_data["title"] = basic["project_name"]
+        if basic.get("tender_no"):
+            tender_data["tender_no"] = basic["tender_no"]
+        if basic.get("tender_unit"):
+            tender_data["tender_unit"] = basic["tender_unit"]
+        if basic.get("tender_method"):
+            # 转换为字典值
+            method_map = {"公开招标": "PUBLIC", "邀请招标": "INVITE", "竞争性谈判": "NEGOTIATE", "询价": "INQUIRY", "单一来源": "SINGLE"}
+            tender_data["tender_method"] = method_map.get(basic["tender_method"], basic["tender_method"])
+        if basic.get("budget_amount") is not None:
+            tender_data["budget_amount"] = basic["budget_amount"]
+        if timeline.get("bid_deadline"):
+            tender_data["reg_deadline"] = timeline["bid_deadline"]
+        if timeline.get("open_bid_time"):
+            tender_data["open_bid_time"] = timeline["open_bid_time"]
+        if timeline.get("deposit_amount") is not None:
+            tender_data["deposit_amount"] = timeline["deposit_amount"]
+        if timeline.get("deposit_deadline"):
+            tender_data["deposit_deadline"] = timeline["deposit_deadline"]
+
+        if doc.tender_id:
+            # 更新已有招标信息
+            tender_result = await db.execute(
+                select(Tender).where(Tender.id == doc.tender_id, Tender.is_deleted == 0)
+            )
+            tender = tender_result.scalar_one_or_none()
+            if tender:
+                for key, value in tender_data.items():
+                    setattr(tender, key, value)
+                tender.updated_by = user_id
+                await db.flush()
+                await db.refresh(tender)
+                return {"tender_id": tender.id, "action": "updated", "fields_updated": list(tender_data.keys())}
+
+        # 创建新招标信息
+        tender_data["status"] = "PENDING"
+        tender_data["created_by"] = user_id
+        tender_data["updated_by"] = user_id
+        tender = Tender(**tender_data)
+        db.add(tender)
+        await db.flush()
+        await db.refresh(tender)
+
+        # 关联文档到新招标
+        doc.tender_id = tender.id
+        await db.flush()
+
+        return {"tender_id": tender.id, "action": "created", "fields_updated": list(tender_data.keys())}
 
     def _doc_to_dict(self, doc: TenderDocument) -> dict:
         d = {

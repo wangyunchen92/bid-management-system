@@ -117,6 +117,7 @@ export const TENDER_DOC_API = {
   BY_PROJECT: (projectId: number) => `${API_PREFIX}/tender-doc/by-project/${projectId}`,
   BY_TENDER: (tenderId: number) => `${API_PREFIX}/tender-doc/by-tender/${tenderId}`,
   DELETE: (id: number) => `${API_PREFIX}/tender-doc/${id}`,
+  SAVE_TO_TENDER: (id: number) => `${API_PREFIX}/tender-doc/${id}/save-to-tender`,
 } as const;
 
 export const TENDER_API = {

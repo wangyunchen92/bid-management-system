@@ -57,6 +57,17 @@ async def list_by_tender(
     return success(data=result)
 
 
+@router.post("/{doc_id}/save-to-tender", summary="保存解析结果到招标信息")
+async def save_to_tender(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    result = await tender_doc_service.save_to_tender(db, doc_id, user_id)
+    action_msg = "已更新招标信息" if result["action"] == "updated" else "已创建招标信息"
+    return success(data=result, message=action_msg)
+
+
 @router.delete("/{doc_id}", summary="删除文档")
 async def delete_document(
     doc_id: int,

@@ -8,7 +8,8 @@ import {
   InboxOutlined, FileTextOutlined, ClockCircleOutlined,
   SafetyCertificateOutlined, BarChartOutlined, WarningOutlined,
 } from '@ant-design/icons';
-import { uploadTenderDoc } from '@/services/tender_doc';
+import { uploadTenderDoc, saveToTender } from '@/services/tender_doc';
+import { message } from 'antd';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -461,6 +462,45 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete }
               </Button>
             </div>
           )}
+
+          {/* 保存到招标信息 */}
+          <div style={{
+            marginTop: 16,
+            padding: '12px 16px',
+            background: '#f0fdfa',
+            borderRadius: 8,
+            border: '1px solid #ccfbf1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}>
+            <div>
+              <Text strong style={{ fontSize: 13 }}>保存解析结果</Text>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  将项目名称、招标编号、预算金额、时间节点等信息保存到招标管理
+                </Text>
+              </div>
+            </div>
+            <Button
+              type="primary"
+              size="small"
+              style={{ background: 'linear-gradient(135deg, #0d9488, #14b8a6)', border: 'none', flexShrink: 0 }}
+              onClick={async () => {
+                if (!docInfo?.id) return;
+                try {
+                  const res = await saveToTender(docInfo.id);
+                  const action = res.data.action === 'updated' ? '已更新' : '已创建';
+                  message.success(`${action}招标信息，更新了 ${res.data.fields_updated.length} 个字段`);
+                } catch {
+                  // error handled by interceptor
+                }
+              }}
+            >
+              保存到招标信息
+            </Button>
+          </div>
 
           {/* Bid document requirements summary */}
           {result.bid_document_requirements && (
