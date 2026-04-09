@@ -2,16 +2,28 @@
 标书编制路由 /api/v1/bid/*
 """
 
+import io
+import os
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.deps import get_db, get_current_user_id, require_super_admin
 from app.common.pagination import PaginationParams, get_pagination_params
 from app.common.response import success, page_response
-from app.schemas.bid import BidProjectCreate, BidProjectUpdate, BidSectionCreate, BidSectionUpdate, ReorderSectionsRequest
+from app.schemas.bid import (
+    BidProjectCreate, BidProjectUpdate,
+    BidSectionCreate, BidSectionUpdate,
+    ReorderSectionsRequest,
+    AIGenerateRequest, AIGenerateResponse,
+    BidCheckRequest,
+)
 from app.services.bid_service import bid_service
+from app.services.bid_ai_service import bid_ai_service
+from app.services.bid_export_service import bid_export_service
 
 router = APIRouter()
 
@@ -144,3 +156,59 @@ async def delete_section(
 ):
     await bid_service.delete_section(db, section_id, user_id)
     return success(message="删除成功")
+
+
+# ========== AI 功能 ==========
+
+@router.post("/sections/{section_id}/ai-generate", summary="AI 生成章节内容")
+async def ai_generate_section(
+    section_id: int,
+    data: AIGenerateRequest = AIGenerateRequest(),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """调用 AI 为指定章节生成内容初稿，返回 generated_content（不自动保存）"""
+    content = await bid_ai_service.generate_section_content(
+        db,
+        section_id,
+        tender_requirements=data.tender_requirements,
+        additional_context=data.additional_context,
+    )
+    return success(data={"generated_content": content}, message="AI 内容已生成")
+
+
+@router.post("/projects/{project_id}/compliance-check", summary="废标检查（旧路由，兼容保留）")
+@router.post("/projects/{project_id}/check", summary="废标检查")
+async def compliance_check(
+    project_id: int,
+    data: BidCheckRequest = BidCheckRequest(),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """AI 对照招标要求检查标书合规性，返回逐条检查结果"""
+    result = await bid_ai_service.check_bid_compliance(
+        db,
+        project_id,
+        tender_requirements=data.tender_requirements,
+    )
+    return success(data=result)
+
+
+@router.get("/projects/{project_id}/export-word", summary="导出 Word（旧路由，兼容保留）")
+@router.get("/projects/{project_id}/export", summary="导出 Word")
+async def export_word(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """导出标书为 Word 文件（StreamingResponse）"""
+    file_buffer = await bid_export_service.export_to_word_stream(db, project_id)
+    project_title = await bid_export_service.get_project_title(db, project_id)
+    filename = f"{project_title}.docx"
+    # RFC 5987 编码，支持中文文件名
+    encoded_name = quote(filename, safe="")
+    return StreamingResponse(
+        file_buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+    )
