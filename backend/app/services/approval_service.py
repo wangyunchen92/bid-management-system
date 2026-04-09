@@ -125,6 +125,8 @@ class ApprovalService:
             instance_id=inst.id, operator_id=user_id, action="APPROVE", comment=comment,
         ))
         await db.flush()
+        # 审批回调
+        await self._on_approved(db, inst)
         await db.refresh(inst)
         return await self._instance_to_dict(db, inst)
 
@@ -139,8 +141,38 @@ class ApprovalService:
             instance_id=inst.id, operator_id=user_id, action="REJECT", comment=comment,
         ))
         await db.flush()
+        # 审批回调
+        await self._on_rejected(db, inst)
         await db.refresh(inst)
         return await self._instance_to_dict(db, inst)
+
+    async def _on_approved(self, db: AsyncSession, inst: ApprovalInstance) -> None:
+        if inst.biz_type == "BID_DECISION" and inst.biz_id:
+            from app.models.decision import BidDecision
+            from app.models.tender import Tender
+            result = await db.execute(select(BidDecision).where(BidDecision.id == inst.biz_id))
+            decision = result.scalar_one_or_none()
+            if decision:
+                decision.decision_result = "PASS"
+                tender_result = await db.execute(select(Tender).where(Tender.id == decision.tender_id))
+                tender = tender_result.scalar_one_or_none()
+                if tender:
+                    tender.status = "DECIDED_BID"
+            await db.flush()
+
+    async def _on_rejected(self, db: AsyncSession, inst: ApprovalInstance) -> None:
+        if inst.biz_type == "BID_DECISION" and inst.biz_id:
+            from app.models.decision import BidDecision
+            from app.models.tender import Tender
+            result = await db.execute(select(BidDecision).where(BidDecision.id == inst.biz_id))
+            decision = result.scalar_one_or_none()
+            if decision:
+                decision.decision_result = "REJECT"
+                tender_result = await db.execute(select(Tender).where(Tender.id == decision.tender_id))
+                tender = tender_result.scalar_one_or_none()
+                if tender:
+                    tender.status = "DECIDED_GIVE_UP"
+            await db.flush()
 
     async def transfer(self, db: AsyncSession, instance_id: int, user_id: int,
                        to_user_id: int, comment: Optional[str]) -> dict:
