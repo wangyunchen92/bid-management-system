@@ -1,4 +1,5 @@
 import { get, post, put, del } from '@/utils/request';
+import request from '@/utils/request';
 import { BID_API } from '@/constants/api';
 
 // ── 标书项目 ──────────────────────────────────────────────────
@@ -51,4 +52,18 @@ export function deleteSection(id: number) {
 
 export function reorderSections(projectId: number, items: { id: number; sort_order: number; parent_id?: number }[]) {
   return post<null>(BID_API.SECTION_REORDER(projectId), { items });
+}
+
+export function aiGenerateSection(sectionId: number, data: { tender_requirements?: string; additional_context?: string }) {
+  return post<{ generated_content: string }>(BID_API.SECTION_AI_GENERATE(sectionId), data);
+}
+
+export function bidComplianceCheck(projectId: number, data: { tender_requirements?: string }) {
+  return post<BidCheckResult>(BID_API.PROJECT_CHECK(projectId), data);
+}
+
+export function exportBidWord(projectId: number) {
+  return request.get(BID_API.PROJECT_EXPORT(projectId), {
+    responseType: 'blob',
+  });
 }

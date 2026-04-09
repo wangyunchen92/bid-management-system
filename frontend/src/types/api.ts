@@ -348,6 +348,24 @@ interface TenderParseResult {
   risk_alerts?: string[];
 }
 
+/** 废标检查项 */
+interface BidCheckItem {
+  requirement: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  detail: string;
+  suggestion?: string;
+}
+
+/** 废标检查结果 */
+interface BidCheckResult {
+  overall_status: string;
+  score: number;
+  pass: boolean;
+  items: BidCheckItem[];
+  missing_sections?: string[];
+  risk_warnings?: string[];
+}
+
 /** 投标决策 */
 interface BidDecision {
   id: number;

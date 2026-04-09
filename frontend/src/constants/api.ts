@@ -105,6 +105,9 @@ export const BID_API = {
   SECTION_UPDATE: (id: number) => `${API_PREFIX}/bid/sections/${id}`,
   SECTION_DELETE: (id: number) => `${API_PREFIX}/bid/sections/${id}`,
   SECTION_REORDER: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/sections/reorder`,
+  SECTION_AI_GENERATE: (sectionId: number) => `${API_PREFIX}/bid/sections/${sectionId}/ai-generate`,
+  PROJECT_CHECK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/check`,
+  PROJECT_EXPORT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/export`,
 } as const;
 
 export const TENDER_DOC_API = {
