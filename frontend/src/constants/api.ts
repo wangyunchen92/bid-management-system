@@ -48,3 +48,16 @@ export const APPROVAL_API = {
   REJECT: (id: number) => `${API_PREFIX}/approval/${id}/reject`,
   TRANSFER: (id: number) => `${API_PREFIX}/approval/${id}/transfer`,
 } as const;
+
+export const TENDER_API = {
+  LIST: `${API_PREFIX}/tender/list`,
+  CREATE: `${API_PREFIX}/tender`,
+  DETAIL: (id: number) => `${API_PREFIX}/tender/${id}`,
+  UPDATE: (id: number) => `${API_PREFIX}/tender/${id}`,
+  DELETE: (id: number) => `${API_PREFIX}/tender/${id}`,
+  UPDATE_STATUS: (id: number) => `${API_PREFIX}/tender/${id}/status`,
+  UPDATE_FOLLOWER: (id: number) => `${API_PREFIX}/tender/${id}/follower`,
+  CALENDAR: `${API_PREFIX}/tender/calendar`,
+  STATS: `${API_PREFIX}/tender/stats`,
+  EXPIRING: `${API_PREFIX}/tender/expiring`,
+} as const;

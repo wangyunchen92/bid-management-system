@@ -143,3 +143,45 @@ interface ApprovalDetail {
   instance: ApprovalInstance;
   records: ApprovalRecord[];
 }
+
+/** 招标信息 */
+interface Tender {
+  id: number;
+  title: string;
+  tender_no?: string;
+  tender_unit?: string;
+  tender_method?: string;
+  info_source?: string;
+  province?: string;
+  city?: string;
+  budget_amount?: number;
+  deposit_amount?: number;
+  deposit_deadline?: string;
+  reg_deadline?: string;
+  open_bid_time?: string;
+  status: string;
+  follower_id?: number;
+  follower_name?: string;
+  remark?: string;
+  created_at?: string;
+}
+
+/** 日历项 */
+interface TenderCalendarItem {
+  id: number;
+  title: string;
+  date: string;
+  type: 'reg_deadline' | 'deposit_deadline' | 'open_bid';
+  label: string;
+}
+
+/** 统计 */
+interface TenderStats {
+  total: number;
+  pending: number;
+  decided_bid: number;
+  decided_give_up: number;
+  composing: number;
+  submitted: number;
+  opened: number;
+}
