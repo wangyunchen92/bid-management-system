@@ -185,3 +185,23 @@ interface TenderStats {
   submitted: number;
   opened: number;
 }
+
+/** 投标决策 */
+interface BidDecision {
+  id: number;
+  tender_id: number;
+  tender_title?: string;
+  tender_no?: string;
+  decision_reason?: string;
+  risk_analysis?: string;
+  estimated_amount?: number;
+  win_probability?: number;
+  competitors?: string;
+  decision_result: string;
+  approval_id?: number;
+  approval_status?: string;
+  initiator_id: number;
+  initiator_name?: string;
+  remark?: string;
+  created_at?: string;
+}

@@ -49,6 +49,15 @@ export const APPROVAL_API = {
   TRANSFER: (id: number) => `${API_PREFIX}/approval/${id}/transfer`,
 } as const;
 
+export const DECISION_API = {
+  LIST: `${API_PREFIX}/decision/list`,
+  CREATE: `${API_PREFIX}/decision`,
+  DETAIL: (id: number) => `${API_PREFIX}/decision/${id}`,
+  UPDATE: (id: number) => `${API_PREFIX}/decision/${id}`,
+  DELETE: (id: number) => `${API_PREFIX}/decision/${id}`,
+  BY_TENDER: (tenderId: number) => `${API_PREFIX}/decision/by-tender/${tenderId}`,
+} as const;
+
 export const TENDER_API = {
   LIST: `${API_PREFIX}/tender/list`,
   CREATE: `${API_PREFIX}/tender`,
