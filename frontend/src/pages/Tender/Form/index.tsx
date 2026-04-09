@@ -42,7 +42,7 @@ export default function TenderFormPage() {
   }, [getDictItems]);
 
   const loadUsers = useCallback(async () => {
-    const res = await getUserList({ page: 1, page_size: 200 });
+    const res = await getUserList({ page: 1, page_size: 100 });
     setUserOptions(res.data.items.map((u: SystemUser) => ({ value: u.id, label: u.real_name })));
   }, []);
 

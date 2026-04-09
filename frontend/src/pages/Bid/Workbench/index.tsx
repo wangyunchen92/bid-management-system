@@ -242,7 +242,7 @@ export default function BidWorkbenchPage() {
 
   // 加载用户列表
   useEffect(() => {
-    getUserList({ page: 1, page_size: 200 })
+    getUserList({ page: 1, page_size: 100 })
       .then((res) => {
         setUserOptions(res.data.items.map((u: SystemUser) => ({ value: u.id, label: u.real_name })));
       })

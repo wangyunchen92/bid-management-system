@@ -69,7 +69,7 @@ function DecisionForm({ open, mode, initialValues, onOk, onCancel }: DecisionFor
     if (!open) return;
     Promise.all([
       getTenderList({ status: 'PENDING', page: 1, page_size: 100 }),
-      getUserList({ page: 1, page_size: 200 }),
+      getUserList({ page: 1, page_size: 100 }),
     ]).then(([tRes, uRes]) => {
       setTenderOptions(tRes.data.items.map((t: Tender) => ({ value: t.id, label: t.title })));
       setUserOptions(uRes.data.items.map((u: SystemUser) => ({ value: u.id, label: u.real_name })));

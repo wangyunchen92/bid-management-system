@@ -55,7 +55,7 @@ function OpeningForm({ open, mode, initialValues, onOk, onCancel }: OpeningFormP
 
   useEffect(() => {
     if (!open) return;
-    getTenderList({ page: 1, page_size: 200 })
+    getTenderList({ page: 1, page_size: 100 })
       .then((res) => {
         setTenderOptions(res.data.items.map((t: Tender) => ({ value: t.id, label: t.title })));
       })

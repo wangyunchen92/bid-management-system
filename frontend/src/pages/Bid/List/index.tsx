@@ -64,12 +64,12 @@ function ProjectFormModal({ open, mode, initialValues, onOk, onCancel }: Project
 
   useEffect(() => {
     if (!open) return;
-    getTenderList({ page: 1, page_size: 200 })
+    getTenderList({ page: 1, page_size: 100 })
       .then((res) => {
         setTenderOptions(res.data.items.map((t: Tender) => ({ value: t.id, label: t.title })));
       })
       .catch(() => {});
-    getUserList({ page: 1, page_size: 200 })
+    getUserList({ page: 1, page_size: 100 })
       .then((res) => {
         setUserOptions(res.data.items.map((u: SystemUser) => ({ value: u.id, label: u.real_name })));
       })
