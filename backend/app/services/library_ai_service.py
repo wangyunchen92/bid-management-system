@@ -75,22 +75,75 @@ class LibraryAIService:
             self.client = OpenAI(api_key=settings.AI_API_KEY, base_url=settings.AI_BASE_URL)
         return self.client
 
+    def _try_vision_recognize(self, file_path: str, module: str) -> Optional[dict]:
+        """对扫描件/图片 PDF 用视觉模型识别"""
+        import base64
+        import fitz
+
+        try:
+            doc = fitz.open(file_path)
+            page = doc[0]
+            images = page.get_images()
+            if not images:
+                doc.close()
+                return None
+
+            xref = images[0][0]
+            base_image = doc.extract_image(xref)
+            image_bytes = base_image["image"]
+            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+            ext = base_image["ext"]
+            doc.close()
+
+            # 尝试用视觉模型
+            vision_model = getattr(settings, "AI_VISION_MODEL", None)
+            if not vision_model:
+                return None
+
+            module_info = MODULE_PROMPTS[module]
+            client = self._get_client()
+            response = client.chat.completions.create(
+                model=vision_model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"请识别这张{module_info['description']}图片中的信息。\n\n{module_info['fields']}"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{image_b64}"}},
+                    ],
+                }],
+                max_tokens=2048,
+                temperature=0.1,
+            )
+            result_text = response.choices[0].message.content.strip()
+            if result_text.startswith("```"):
+                result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
+                if result_text.endswith("```"):
+                    result_text = result_text[:-3]
+            return json.loads(result_text)
+        except Exception as e:
+            logger.warning(f"视觉模型识别失败: {e}")
+            return None
+
     def recognize(self, file_path: str, module: str) -> dict:
         """识别文件内容，返回结构化字段"""
         if module not in MODULE_PROMPTS:
             raise ValueError(f"不支持的模块: {module}")
 
         # 提取文本
+        text = ""
         try:
             result = document_parser.extract_text(file_path)
             text = result["text"]
         except Exception as e:
             logger.error(f"文本提取失败: {e}")
-            # 对于图片文件，提取不了文本，返回空
-            return {"error": "无法提取文件内容，请手动填写"}
 
         if not text or len(text.strip()) < 10:
-            return {"error": "文件内容为空或过少，请手动填写"}
+            # 扫描件/图片 PDF — 尝试视觉模型
+            logger.info("文本提取为空，尝试视觉模型识别...")
+            vision_result = self._try_vision_recognize(file_path, module)
+            if vision_result:
+                return vision_result
+            return {"error": "该文件是扫描件或图片，无法提取文字。请开通视觉模型或手动填写信息。"}
 
         # 截断过长文本
         if len(text) > 10000:

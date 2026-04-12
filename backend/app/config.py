@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     AI_API_KEY: str = "46813e98-c5d7-4979-9875-81d6aa3b4243"
     AI_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
     AI_MODEL: str = "doubao-seed-1-6-251015"
+    AI_VISION_MODEL: str = ""  # 视觉模型（如 doubao-1-5-vision-pro-250328），为空则不启用扫描件识别
 
     @property
     def DATABASE_URL(self) -> str:
