@@ -72,3 +72,17 @@ export function updateProduct(id: number, data: Partial<Product>) {
 export function deleteProduct(id: number) {
   return del(LIBRARY_API.PROD_DELETE(id));
 }
+
+// ========== 文件上传 ==========
+
+export function uploadLibraryFile(module: string, recordId: number, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return post(LIBRARY_API.UPLOAD_FILE(module, recordId), formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+export function getFileUrl(filePath: string) {
+  return LIBRARY_API.FILE_URL(filePath);
+}

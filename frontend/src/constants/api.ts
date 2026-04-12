@@ -88,6 +88,9 @@ export const LIBRARY_API = {
   PROD_CREATE: `${API_PREFIX}/library/products`,
   PROD_UPDATE: (id: number) => `${API_PREFIX}/library/products/${id}`,
   PROD_DELETE: (id: number) => `${API_PREFIX}/library/products/${id}`,
+  // 文件上传
+  UPLOAD_FILE: (module: string, id: number) => `${API_PREFIX}/library/${module}/${id}/upload-file`,
+  FILE_URL: (filePath: string) => `${API_PREFIX}/library/file/${filePath}`,
 } as const;
 
 export const BID_API = {

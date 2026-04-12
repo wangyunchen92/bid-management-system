@@ -217,6 +217,7 @@ interface Qualification {
   status: number;
   remark?: string;
   created_at?: string;
+  file_path?: string;
 }
 
 /** 业绩案例 */
@@ -230,6 +231,7 @@ interface Achievement {
   description?: string;
   remark?: string;
   created_at?: string;
+  file_path?: string;
 }
 
 /** 人员证书 */
@@ -244,6 +246,7 @@ interface PersonnelCert {
   status: number;
   remark?: string;
   created_at?: string;
+  file_path?: string;
 }
 
 /** 产品/设备 */
@@ -257,6 +260,7 @@ interface Product {
   description?: string;
   remark?: string;
   created_at?: string;
+  file_path?: string;
 }
 
 /** 标书项目 */
