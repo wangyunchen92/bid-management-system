@@ -1,15 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Space, message, Popconfirm,
+  Space, message, Popconfirm, Upload, Typography,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
 import {
   getProductList,
   createProduct,
   updateProduct,
   deleteProduct,
+  uploadLibraryFile,
+  getFileUrl,
 } from '@/services/library';
+
+const { Text } = Typography;
 
 export default function ProductPage() {
   const [data, setData] = useState<Product[]>([]);
@@ -79,6 +83,14 @@ export default function ProductPage() {
       render: (v: number) => v ?? '-',
     },
     { title: '单位', dataIndex: 'unit', key: 'unit', width: 80 },
+    {
+      title: '附件', dataIndex: 'file_path', key: 'file_path', width: 100,
+      render: (v: string) => v ? (
+        <a href={getFileUrl(v)} target="_blank" rel="noopener">
+          <Space size={4}><FileOutlined />查看</Space>
+        </a>
+      ) : <Text type="secondary">—</Text>,
+    },
     {
       title: '操作', key: 'action', width: 100,
       render: (_: unknown, record: Product) => (
@@ -158,6 +170,32 @@ export default function ProductPage() {
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} placeholder="备注信息" />
           </Form.Item>
+          {editing && (
+            <Form.Item label="上传附件">
+              <Upload
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                maxCount={1}
+                showUploadList={false}
+                beforeUpload={async (file) => {
+                  try {
+                    await uploadLibraryFile('products', editing.id, file);
+                    message.success('上传成功');
+                    load(page, keyword);
+                  } catch { /* handled */ }
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>
+                  {editing.file_path ? '重新上传' : '上传文件'}
+                </Button>
+              </Upload>
+              {editing.file_path && (
+                <a href={getFileUrl(editing.file_path)} target="_blank" rel="noopener" style={{ marginLeft: 8, fontSize: 12 }}>
+                  当前文件
+                </a>
+              )}
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </Card>
