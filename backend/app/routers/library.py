@@ -147,7 +147,6 @@ async def upload_file(
 @router.get("/file/{file_path:path}", summary="下载/预览文件")
 async def download_file(
     file_path: str,
-    _: int = Depends(get_current_user_id),
 ):
     # 防止路径遍历攻击
     full_path = UPLOAD_BASE.parent / file_path
