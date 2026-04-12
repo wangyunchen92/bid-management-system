@@ -27,6 +27,7 @@ class Qualification(BaseModel):
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
     remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
 class Achievement(BaseModel):
@@ -40,6 +41,7 @@ class Achievement(BaseModel):
     project_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
 class PersonnelCert(BaseModel):
@@ -54,6 +56,7 @@ class PersonnelCert(BaseModel):
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
     remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
 class Product(BaseModel):
@@ -67,3 +70,4 @@ class Product(BaseModel):
     unit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

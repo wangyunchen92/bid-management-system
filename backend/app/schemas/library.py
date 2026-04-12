@@ -44,6 +44,7 @@ class QualificationResponse(BaseModel):
     expiry_date: Optional[datetime] = None
     status: int
     remark: Optional[str] = None
+    file_path: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -83,6 +84,7 @@ class AchievementResponse(BaseModel):
     project_type: Optional[str] = None
     description: Optional[str] = None
     remark: Optional[str] = None
+    file_path: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -125,6 +127,7 @@ class PersonnelCertResponse(BaseModel):
     expiry_date: Optional[datetime] = None
     status: int
     remark: Optional[str] = None
+    file_path: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -164,6 +167,7 @@ class ProductResponse(BaseModel):
     unit: Optional[str] = None
     description: Optional[str] = None
     remark: Optional[str] = None
+    file_path: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
