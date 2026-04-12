@@ -21,6 +21,7 @@ class QualificationCreate(BaseModel):
     expiry_date: Optional[datetime] = None
     status: int = Field(default=1)
     remark: Optional[str] = None
+    file_path: Optional[str] = Field(default=None)
 
 
 class QualificationUpdate(BaseModel):
@@ -63,6 +64,7 @@ class AchievementCreate(BaseModel):
     project_type: Optional[str] = Field(default=None, max_length=50)
     description: Optional[str] = None
     remark: Optional[str] = None
+    file_path: Optional[str] = Field(default=None)
 
 
 class AchievementUpdate(BaseModel):
@@ -104,6 +106,7 @@ class PersonnelCertCreate(BaseModel):
     expiry_date: Optional[datetime] = None
     status: int = Field(default=1)
     remark: Optional[str] = None
+    file_path: Optional[str] = Field(default=None)
 
 
 class PersonnelCertUpdate(BaseModel):
@@ -146,6 +149,7 @@ class ProductCreate(BaseModel):
     unit: Optional[str] = Field(default=None, max_length=20)
     description: Optional[str] = None
     remark: Optional[str] = None
+    file_path: Optional[str] = Field(default=None)
 
 
 class ProductUpdate(BaseModel):

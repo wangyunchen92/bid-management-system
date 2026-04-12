@@ -7,13 +7,14 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.deps import get_current_user_id, get_db, require_super_admin
 from app.common.exceptions import BusinessException, NotFoundException
+from app.services.library_ai_service import library_ai_service
 from app.common.pagination import PaginationParams, get_pagination_params
 from app.common.response import page_response, success
 from app.models.library import Achievement, PersonnelCert, Product, Qualification
@@ -45,6 +46,53 @@ MODULE_MODEL_MAP = {
 
 # 上传目录基路径
 UPLOAD_BASE = Path(__file__).parent.parent.parent / "data" / "uploads" / "library"
+
+
+@router.post("/{module}/recognize", summary="上传文件并AI识别内容")
+async def recognize_file(
+    module: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """上传文件，AI 识别内容并返回结构化字段（不创建记录，只返回识别结果）"""
+    # 验证 module
+    valid_modules = {"qualifications", "achievements", "personnel-certs", "products"}
+    if module not in valid_modules:
+        raise BusinessException(f"无效的模块: {module}")
+
+    # 验证文件类型
+    ext = Path(file.filename).suffix.lower()
+    allowed = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
+    if ext not in allowed:
+        raise BusinessException(f"不支持的文件类型: {ext}")
+
+    # 保存临时文件
+    import uuid as uuid_mod
+    temp_dir = UPLOAD_BASE.parent / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = temp_dir / f"{uuid_mod.uuid4()}{ext}"
+
+    content = await file.read()
+    temp_path.write_bytes(content)
+
+    # AI 识别
+    recognized = library_ai_service.recognize(str(temp_path), module)
+
+    # 将临时文件移到正式目录
+    formal_dir = UPLOAD_BASE / module
+    formal_dir.mkdir(parents=True, exist_ok=True)
+    formal_filename = f"{uuid_mod.uuid4()}{ext}"
+    formal_path = formal_dir / formal_filename
+    temp_path.rename(formal_path)
+
+    stored_path = f"library/{module}/{formal_filename}"
+
+    return success(data={
+        "recognized_fields": recognized,
+        "file_path": stored_path,
+        "original_name": file.filename,
+    })
 
 
 @router.post("/{module}/{record_id}/upload-file", summary="上传附件")
