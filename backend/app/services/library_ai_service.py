@@ -19,7 +19,7 @@ MODULE_PROMPTS = {
         "fields": """请提取以下字段（JSON格式，不要```json包裹）：
 {
   "cert_name": "证书名称",
-  "cert_type": "证书类型（营业执照/资质证书/ISO认证/安全生产许可证/其他）",
+  "cert_type": "证书类型，只能填以下值之一：BUSINESS_LICENSE/QUALIFICATION/ISO/SAFETY/OTHER",
   "cert_no": "证书编号",
   "issuing_authority": "发证机关",
   "issue_date": "发证日期 (YYYY-MM-DD 或 null)",

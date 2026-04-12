@@ -1,0 +1,1 @@
+import{g as r,a,p as u,d as s,T as n}from"./index-DVPQcT_z.js";function d(e){return r(n.LIST,e)}function o(e){return u(n.CREATE,e)}function E(e){return r(n.DETAIL(e))}function c(e,t){return a(n.UPDATE(e),t)}function i(e){return s(n.DELETE(e))}function f(e,t){return r(n.CALENDAR,{year:e,month:t})}export{E as a,f as b,o as c,i as d,d as g,c as u};

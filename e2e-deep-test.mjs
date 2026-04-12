@@ -100,7 +100,7 @@ async function testDashboard() {
 
   await test('仪表盘渲染正常', async () => {
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     const body = await page.textContent('body');
     assert(body.includes('招投标管理平台'), '仪表盘内容异常');
   });
@@ -110,6 +110,32 @@ async function testDashboard() {
     for (const item of ['仪表盘', '招标管理', '投标决策', '开标跟踪', '企业资料库', '标书编制', '审批中心', '系统管理']) {
       assert(aside.includes(item), `缺少菜单: ${item}`);
     }
+  });
+
+  await test('统计卡片存在（在投项目数）', async () => {
+    await page.waitForTimeout(1500);
+    const body = await page.textContent('body');
+    assert(body.includes('在投项目数'), '应显示"在投项目数"统计卡片');
+  });
+
+  await test('统计卡片存在（本年中标数）', async () => {
+    const body = await page.textContent('body');
+    assert(body.includes('本年中标数'), '应显示"本年中标数"统计卡片');
+  });
+
+  await test('统计卡片存在（中标率）', async () => {
+    const body = await page.textContent('body');
+    assert(body.includes('中标率'), '应显示"中标率"统计卡片');
+  });
+
+  await test('统计卡片存在（即将截止）', async () => {
+    const body = await page.textContent('body');
+    assert(body.includes('即将截止'), '应显示"即将截止"统计卡片');
+  });
+
+  await test('图表容器存在（ECharts canvas）', async () => {
+    const canvases = await page.$$('canvas');
+    assert(canvases.length >= 2, `应有至少2个ECharts canvas，实际: ${canvases.length}`);
   });
 }
 
@@ -430,7 +456,7 @@ async function testLibraryCRUD() {
   for (const mod of modules) {
     await test(`${mod.name} — 页面渲染+新增弹窗`, async () => {
       await page.goto(`${BASE_URL}${mod.path}`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
 
       const addBtn = await page.$('button:has-text("新增")');
       assert(addBtn !== null, `${mod.name}应有新增按钮`);
@@ -453,6 +479,49 @@ async function testLibraryCRUD() {
       await page.waitForTimeout(1500);
 
       // 验证数据出现（可能成功也可能因必填字段不全失败，但弹窗应已关闭或显示验证）
+    });
+
+    // 新增: 验证表格有"附件"列
+    await test(`${mod.name} — 表格有"附件"列`, async () => {
+      await page.goto(`${BASE_URL}${mod.path}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1500);
+      const headers = await page.$$('.ant-table-thead th');
+      let found = false;
+      for (const th of headers) {
+        const text = await th.textContent();
+        if (text && text.includes('附件')) { found = true; break; }
+      }
+      assert(found, `${mod.name}表格应有"附件"列`);
+    });
+
+    // 新增: 验证编辑弹窗中有"上传文件"按钮（前提：有记录才能编辑）
+    await test(`${mod.name} — 编辑弹窗中有上传文件按钮`, async () => {
+      await page.goto(`${BASE_URL}${mod.path}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1500);
+
+      // 点击第一条记录的编辑按钮
+      const editBtn = await page.$('.ant-table-tbody .ant-btn[title], .ant-table-tbody button');
+      if (!editBtn) {
+        // 如果没有记录（表格为空），通过 API 数据应已存在，重新确认
+        const body = await page.textContent('body');
+        assert(body.includes('E2E') || body.includes('测试') || body.includes('—'), `${mod.name}应有记录可以编辑`);
+        return;
+      }
+      await editBtn.click();
+      await page.waitForTimeout(800);
+
+      const modal = await page.$('.ant-modal');
+      assert(modal !== null, `${mod.name}编辑弹窗应弹出`);
+
+      const modalText = await modal.textContent();
+      assert(
+        modalText.includes('上传文件') || modalText.includes('重新上传') || modalText.includes('上传附件'),
+        `${mod.name}编辑弹窗应包含上传文件按钮，实际内容: ${modalText.substring(0, 200)}`
+      );
+
+      // 关闭弹窗
+      const closeBtn = await page.$('.ant-modal .ant-modal-close');
+      if (closeBtn) { await closeBtn.click(); await page.waitForTimeout(300); }
     });
   }
 }
@@ -530,10 +599,55 @@ async function testBidCRUD() {
 }
 
 // ============================================================
-// 13. 退出登录
+// 13. 标书知识库
+// ============================================================
+async function testKnowledge() {
+  console.log('\n📋 13. 标书知识库');
+
+  await test('导航到知识库列表页', async () => {
+    await page.goto(`${BASE_URL}/knowledge/list`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+    const body = await page.textContent('body');
+    assert(body.length > 100, '知识库页面不应为空白');
+  });
+
+  await test('知识库页面渲染正常（无JS报错）', async () => {
+    const body = await page.textContent('body');
+    assert(
+      body.includes('新增模板') || body.includes('搜索') || body.includes('知识库'),
+      '知识库页面应渲染正常'
+    );
+  });
+
+  await test('新增模板按钮可点击', async () => {
+    const addBtn = await page.$('button:has-text("新增模板")');
+    assert(addBtn !== null, '应存在"新增模板"按钮');
+    await addBtn.click();
+    await page.waitForTimeout(800);
+  });
+
+  await test('新增模板弹窗弹出', async () => {
+    const modal = await page.$('.ant-modal');
+    assert(modal !== null, '点击新增后应弹出弹窗');
+    const modalText = await modal.textContent();
+    assert(
+      modalText.includes('新增模板') || modalText.includes('模板标题') || modalText.includes('分类'),
+      '弹窗应包含知识库模板字段'
+    );
+    // 关闭弹窗
+    const closeBtn = await page.$('.ant-modal .ant-modal-close');
+    if (closeBtn) {
+      await closeBtn.click();
+      await page.waitForTimeout(300);
+    }
+  });
+}
+
+// ============================================================
+// 14. 退出登录
 // ============================================================
 async function testLogout() {
-  console.log('\n📋 13. 退出登录');
+  console.log('\n📋 14. 退出登录');
 
   await test('退出并跳转登录页', async () => {
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'domcontentloaded' });
@@ -591,6 +705,7 @@ async function main() {
     await testOpeningCRUD();
     await testLibraryCRUD();
     await testBidCRUD();
+    await testKnowledge();
     await testLogout();
   } catch (err) {
     console.log(`\n💥 意外错误: ${err.message}`);

@@ -18,12 +18,11 @@ import {
 const { Text } = Typography;
 
 const CERT_TYPES = [
-  { label: '企业资质', value: '企业资质' },
-  { label: '安全生产许可', value: '安全生产许可' },
-  { label: '质量认证', value: '质量认证' },
-  { label: 'ISO认证', value: 'ISO认证' },
-  { label: '行业许可证', value: '行业许可证' },
-  { label: '其他', value: '其他' },
+  { label: '营业执照', value: 'BUSINESS_LICENSE' },
+  { label: '资质证书', value: 'QUALIFICATION' },
+  { label: 'ISO认证', value: 'ISO' },
+  { label: '安全生产许可证', value: 'SAFETY' },
+  { label: '其他', value: 'OTHER' },
 ];
 
 export default function QualificationPage() {
