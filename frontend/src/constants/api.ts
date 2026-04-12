@@ -91,6 +91,8 @@ export const LIBRARY_API = {
   // 文件上传
   UPLOAD_FILE: (module: string, id: number) => `${API_PREFIX}/library/${module}/${id}/upload-file`,
   FILE_URL: (filePath: string) => `${API_PREFIX}/library/file/${filePath}`,
+  // AI识别
+  RECOGNIZE: (module: string) => `${API_PREFIX}/library/${module}/recognize`,
 } as const;
 
 export const BID_API = {

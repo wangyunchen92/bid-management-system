@@ -86,3 +86,20 @@ export function uploadLibraryFile(module: string, recordId: number, file: File) 
 export function getFileUrl(filePath: string) {
   return LIBRARY_API.FILE_URL(filePath);
 }
+
+// ========== AI识别 ==========
+
+export interface RecognizeResponse {
+  recognized_fields: Record<string, string> & { error?: string };
+  file_path: string;
+  original_name: string;
+}
+
+export function recognizeLibraryFile(module: string, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return post<RecognizeResponse>(LIBRARY_API.RECOGNIZE(module), formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  });
+}
