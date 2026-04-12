@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Space, message, Popconfirm, Upload, Typography,
+  Space, message, Popconfirm, Upload, Typography, Spin,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import {
   getProductList,
   createProduct,
@@ -11,6 +11,7 @@ import {
   deleteProduct,
   uploadLibraryFile,
   getFileUrl,
+  recognizeLibraryFile,
 } from '@/services/library';
 
 const { Text } = Typography;
@@ -24,6 +25,8 @@ export default function ProductPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form] = Form.useForm();
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognizedFilePath, setRecognizedFilePath] = useState<string | null>(null);
 
   const load = useCallback(async (p = page, kw = keyword) => {
     setLoading(true);
@@ -42,6 +45,7 @@ export default function ProductPage() {
 
   const handleCreate = () => {
     setEditing(null);
+    setRecognizedFilePath(null);
     form.resetFields();
     form.setFieldsValue({ quantity: 1 });
     setModalOpen(true);
@@ -55,11 +59,15 @@ export default function ProductPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const payload: Record<string, unknown> = { ...values };
+    if (!editing && recognizedFilePath) {
+      payload.file_path = recognizedFilePath;
+    }
     if (editing) {
-      await updateProduct(editing.id, values);
+      await updateProduct(editing.id, payload);
       message.success('更新成功');
     } else {
-      await createProduct(values);
+      await createProduct(payload);
       message.success('创建成功');
     }
     setModalOpen(false);
@@ -147,6 +155,54 @@ export default function ProductPage() {
         width={520}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          {!editing && (
+            <div style={{ marginBottom: 16 }}>
+              <Upload.Dragger
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                maxCount={1}
+                showUploadList={false}
+                disabled={recognizing}
+                beforeUpload={async (file) => {
+                  setRecognizing(true);
+                  try {
+                    const res = await recognizeLibraryFile('products', file);
+                    const { recognized_fields, file_path } = res.data;
+                    if (recognized_fields.error) {
+                      message.warning(`AI 识别未成功：${recognized_fields.error}，请手动填写`);
+                    } else {
+                      form.setFieldsValue({ ...recognized_fields });
+                      message.success('AI 识别成功，已自动填充表单');
+                    }
+                    setRecognizedFilePath(file_path);
+                  } catch {
+                    message.error('文件上传失败');
+                  } finally {
+                    setRecognizing(false);
+                  }
+                  return false;
+                }}
+              >
+                {recognizing ? (
+                  <div style={{ padding: '12px 0' }}>
+                    <Spin />
+                    <div style={{ marginTop: 8, color: '#0d9488' }}>AI 正在识别中...</div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="ant-upload-drag-icon">
+                      <InboxOutlined style={{ color: '#0d9488' }} />
+                    </p>
+                    <p className="ant-upload-text" style={{ fontSize: 13 }}>
+                      上传证书/资料文件，AI 自动识别填充
+                    </p>
+                    <p className="ant-upload-hint" style={{ fontSize: 12 }}>
+                      支持 PDF、Word、图片，最大 20MB
+                    </p>
+                  </>
+                )}
+              </Upload.Dragger>
+            </div>
+          )}
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input placeholder="请输入产品/设备名称" />
           </Form.Item>

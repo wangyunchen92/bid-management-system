@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, DatePicker,
-  Space, message, Popconfirm, Upload, Typography,
+  Space, message, Popconfirm, Upload, Typography, Spin,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   getAchievementList,
@@ -12,6 +12,7 @@ import {
   deleteAchievement,
   uploadLibraryFile,
   getFileUrl,
+  recognizeLibraryFile,
 } from '@/services/library';
 
 const { Text } = Typography;
@@ -25,6 +26,8 @@ export default function AchievementPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Achievement | null>(null);
   const [form] = Form.useForm();
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognizedFilePath, setRecognizedFilePath] = useState<string | null>(null);
 
   const load = useCallback(async (p = page, kw = keyword) => {
     setLoading(true);
@@ -43,6 +46,7 @@ export default function AchievementPage() {
 
   const handleCreate = () => {
     setEditing(null);
+    setRecognizedFilePath(null);
     form.resetFields();
     setModalOpen(true);
   };
@@ -58,10 +62,13 @@ export default function AchievementPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...values,
       completion_date: values.completion_date ? values.completion_date.format('YYYY-MM-DD') : undefined,
     };
+    if (!editing && recognizedFilePath) {
+      payload.file_path = recognizedFilePath;
+    }
     if (editing) {
       await updateAchievement(editing.id, payload);
       message.success('更新成功');
@@ -154,6 +161,56 @@ export default function AchievementPage() {
         width={560}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          {!editing && (
+            <div style={{ marginBottom: 16 }}>
+              <Upload.Dragger
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                maxCount={1}
+                showUploadList={false}
+                disabled={recognizing}
+                beforeUpload={async (file) => {
+                  setRecognizing(true);
+                  try {
+                    const res = await recognizeLibraryFile('achievements', file);
+                    const { recognized_fields, file_path } = res.data;
+                    if (recognized_fields.error) {
+                      message.warning(`AI 识别未成功：${recognized_fields.error}，请手动填写`);
+                    } else {
+                      const formValues: Record<string, unknown> = { ...recognized_fields };
+                      if (formValues.completion_date) formValues.completion_date = dayjs(formValues.completion_date as string);
+                      form.setFieldsValue(formValues);
+                      message.success('AI 识别成功，已自动填充表单');
+                    }
+                    setRecognizedFilePath(file_path);
+                  } catch {
+                    message.error('文件上传失败');
+                  } finally {
+                    setRecognizing(false);
+                  }
+                  return false;
+                }}
+              >
+                {recognizing ? (
+                  <div style={{ padding: '12px 0' }}>
+                    <Spin />
+                    <div style={{ marginTop: 8, color: '#0d9488' }}>AI 正在识别中...</div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="ant-upload-drag-icon">
+                      <InboxOutlined style={{ color: '#0d9488' }} />
+                    </p>
+                    <p className="ant-upload-text" style={{ fontSize: 13 }}>
+                      上传证书/资料文件，AI 自动识别填充
+                    </p>
+                    <p className="ant-upload-hint" style={{ fontSize: 12 }}>
+                      支持 PDF、Word、图片，最大 20MB
+                    </p>
+                  </>
+                )}
+              </Upload.Dragger>
+            </div>
+          )}
           <Form.Item name="project_name" label="项目名称" rules={[{ required: true, message: '请输入项目名称' }]}>
             <Input placeholder="请输入项目名称" />
           </Form.Item>
