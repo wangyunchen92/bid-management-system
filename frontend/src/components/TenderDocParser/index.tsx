@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import {
   Upload, Spin, Tabs, Descriptions, Timeline, List, Table, Alert,
-  Button, Typography, Tag, Space,
-} from 'antd';
+  Button, Typography, Tag, Space, App } from 'antd';
 import type { UploadProps } from 'antd';
 import {
   InboxOutlined, FileTextOutlined, ClockCircleOutlined,
   SafetyCertificateOutlined, BarChartOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { uploadTenderDoc, saveToTender } from '@/services/tender_doc';
-import { message } from 'antd';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -29,6 +27,7 @@ const PARSE_STATUS_STEPS: Record<string, { text: string; color: string }> = {
 };
 
 export default function TenderDocParser({ projectId, tenderId, onParseComplete }: TenderDocParserProps) {
+  const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
   const [parseStatus, setParseStatus] = useState<TenderDocumentInfo['parse_status'] | null>(null);
   const [docInfo, setDocInfo] = useState<TenderDocumentInfo | null>(null);

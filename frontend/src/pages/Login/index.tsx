@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Checkbox, message } from 'antd';
+import { Form, Input, Button, Checkbox, App } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import useAuthStore from '@/stores/useAuthStore';
 import { SYSTEM_NAME } from '@/constants';
@@ -9,6 +9,7 @@ import { isAuthenticated } from '@/utils/auth';
 const REMEMBER_KEY = 'bid_system_remember_username';
 
 export default function LoginPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const { login, loading } = useAuthStore();
   const [form] = Form.useForm();

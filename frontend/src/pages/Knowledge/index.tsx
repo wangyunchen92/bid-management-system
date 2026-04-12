@@ -11,9 +11,7 @@ import {
   Select,
   Space,
   Tag,
-  Typography,
-  message,
-} from 'antd';
+  Typography,  App } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, BookOutlined } from '@ant-design/icons';
 import { getKnowledgeList, createKnowledge, updateKnowledge, deleteKnowledge } from '@/services/knowledge';
 
@@ -43,6 +41,7 @@ function getCategoryLabel(value?: string) {
 }
 
 export default function KnowledgePage() {
+  const { message } = App.useApp();
   const [list, setList] = useState<KnowledgeTemplate[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

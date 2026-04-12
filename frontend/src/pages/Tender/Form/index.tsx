@@ -2,8 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Card, Form, Input, InputNumber, Select, DatePicker,
-  Button, Space, message, Row, Col, Spin,
-} from 'antd';
+  Button, Space, Row, Col, Spin,  App } from 'antd';
 import { SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getTender, createTender, updateTender } from '@/services/tender';
@@ -13,6 +12,7 @@ import useDictStore from '@/stores/useDictStore';
 const { TextArea } = Input;
 
 export default function TenderFormPage() {
+  const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

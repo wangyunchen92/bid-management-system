@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Tree, Button, Modal, Form, Input, InputNumber, Switch, TreeSelect,
-  Descriptions, Space, Tag, message, Popconfirm, Empty, Typography,
-} from 'antd';
+  Descriptions, Space, Tag, Popconfirm, Empty, Typography,  App } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
 } from '@ant-design/icons';
@@ -39,6 +38,7 @@ function flattenDepts(depts: Department[]): Department[] {
 }
 
 export default function DepartmentPage() {
+  const { message } = App.useApp();
   const [tree, setTree] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Department | null>(null);

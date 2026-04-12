@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, List, Table, Button, Modal, Form, Input, Switch, InputNumber,
-  Space, Tag, message, Popconfirm, Empty, Typography,
-} from 'antd';
+  Space, Tag, Popconfirm, Empty, Typography,  App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, BookOutlined } from '@ant-design/icons';
 import {
   getDictTypeList, createDictType, updateDictType, deleteDictType,
@@ -12,6 +11,7 @@ import {
 const { Text } = Typography;
 
 export default function DictPage() {
+  const { message } = App.useApp();
   const [types, setTypes] = useState<DictType[]>([]);
   const [typesLoading, setTypesLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<DictType | null>(null);

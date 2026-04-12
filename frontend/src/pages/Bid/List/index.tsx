@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Button, Space, Tag, Input, Select, Row, Col,
-  Form, Modal, DatePicker, Popconfirm, message, Empty, Spin,
-  Avatar, Typography,
-} from 'antd';
+  Form, Modal, DatePicker, Popconfirm, Empty, Spin,
+  Avatar, Typography,  App } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   EditOutlined, DeleteOutlined, ArrowRightOutlined,
@@ -148,6 +147,7 @@ function ProjectFormModal({ open, mode, initialValues, onOk, onCancel }: Project
 
 // ── 主页面 ────────────────────────────────────────────────────
 export default function BidListPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [filterForm] = Form.useForm();
 

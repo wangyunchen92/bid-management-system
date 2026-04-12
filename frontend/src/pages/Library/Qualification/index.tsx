@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, DatePicker, Switch,
-  Space, Tag, message, Popconfirm, Upload, Typography, Spin,
-} from 'antd';
+  Space, Tag, Popconfirm, Upload, Typography, Spin, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
@@ -26,6 +25,7 @@ const CERT_TYPES = [
 ];
 
 export default function QualificationPage() {
+  const { message } = App.useApp();
   const [data, setData] = useState<Qualification[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);

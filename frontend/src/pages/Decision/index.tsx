@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Space, Tag, Input, Select,
-  Popconfirm, message, Row, Col, Form, Modal, InputNumber,
-  Slider, Descriptions, Timeline, Progress,
-} from 'antd';
+  Popconfirm, Row, Col, Form, Modal, InputNumber,
+  Slider, Descriptions, Timeline, Progress,  App } from 'antd';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   EyeOutlined, EditOutlined, DeleteOutlined,
@@ -272,6 +271,7 @@ function DetailModal({ open, record, onClose }: DetailModalProps) {
 
 // ── 主页面 ────────────────────────────────────────────────
 export default function DecisionPage() {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
 
   const [data, setData] = useState<BidDecision[]>([]);

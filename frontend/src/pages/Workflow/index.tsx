@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Tabs, Table, Button, Modal, Form, Input, Tag, Space,
-  Timeline, Typography, message, Select,
-} from 'antd';
+  Timeline, Typography, Select,  App } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, SwapOutlined,
 } from '@ant-design/icons';
@@ -30,6 +29,7 @@ const ACTION_MAP: Record<string, { color: string; label: string }> = {
 };
 
 export default function WorkflowPage() {
+  const { message } = App.useApp();
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingList, setPendingList] = useState<ApprovalInstance[]>([]);
   const [initiatedList, setInitiatedList] = useState<ApprovalInstance[]>([]);

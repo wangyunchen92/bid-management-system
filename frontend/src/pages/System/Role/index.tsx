@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, Switch,
-  Space, Tag, message, Popconfirm,
-} from 'antd';
+  Space, Tag, Popconfirm,  App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { getRoleList, createRole, updateRole, deleteRole } from '@/services/system';
 
 export default function RolePage() {
+  const { message } = App.useApp();
   const [roles, setRoles] = useState<SysRole[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

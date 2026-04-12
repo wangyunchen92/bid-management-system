@@ -2,8 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Space, Tag, Input, Select, DatePicker,
-  Popconfirm, message, Row, Col, Form,
-} from 'antd';
+  Popconfirm, Row, Col, Form,  App } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -23,6 +22,7 @@ const STATUS_TAG_MAP: Record<string, { color: string; label: string }> = {
 };
 
 export default function TenderListPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const { getDictItems } = useDictStore();
   const [form] = Form.useForm();

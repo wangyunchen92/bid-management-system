@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber,
-  Space, message, Popconfirm, Upload, Typography, Spin,
-} from 'antd';
+  Space, Popconfirm, Upload, Typography, Spin,  App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import {
   getProductList,
@@ -17,6 +16,7 @@ import {
 const { Text } = Typography;
 
 export default function ProductPage() {
+  const { message } = App.useApp();
   const [data, setData] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);

@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
-  Modal, Form, TreeSelect, InputNumber, message, Empty, Spin,
-  Tooltip, Dropdown, Card, Drawer, Progress, List,
-} from 'antd';
+  Modal, Form, TreeSelect, InputNumber, Empty, Spin,
+  Tooltip, Dropdown, Card, Drawer, Progress, List,  App } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
@@ -79,6 +78,7 @@ interface AddSectionModalProps {
 }
 
 function AddSectionModal({ open, projectId, sections, defaultParentId, onOk, onCancel }: AddSectionModalProps) {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -192,6 +192,7 @@ function EditTitleModal({ open, section, onOk, onCancel }: EditTitleModalProps) 
 
 // ── 主页面 ────────────────────────────────────────────────────
 export default function BidWorkbenchPage() {
+  const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const projectId = Number(id);

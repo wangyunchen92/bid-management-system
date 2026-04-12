@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, DatePicker, Switch,
-  Space, Tag, message, Popconfirm, Upload, Typography, Spin,
-} from 'antd';
+  Space, Tag, Popconfirm, Upload, Typography, Spin,  App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
@@ -18,6 +17,7 @@ import {
 const { Text } = Typography;
 
 export default function PersonnelCertPage() {
+  const { message } = App.useApp();
   const [data, setData] = useState<PersonnelCert[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);

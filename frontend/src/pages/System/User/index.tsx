@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Tree, Table, Button, Modal, Form, Input, Select, TreeSelect,
-  Space, Tag, message, Popconfirm, Typography,
-} from 'antd';
+  Space, Tag, Popconfirm, Typography,  App } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined, SearchOutlined,
 } from '@ant-design/icons';
@@ -35,6 +34,7 @@ function toTreeData(depts: Department[]): TreeProps['treeData'] {
 }
 
 export default function UserPage() {
+  const { message } = App.useApp();
   const [deptTree, setDeptTree] = useState<Department[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<number | undefined>();
   const [users, setUsers] = useState<SystemUser[]>([]);

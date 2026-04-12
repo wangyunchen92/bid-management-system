@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, DatePicker,
-  Space, message, Popconfirm, Upload, Typography, Spin,
-} from 'antd';
+  Space, Popconfirm, Upload, Typography, Spin,  App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UploadOutlined, FileOutlined, InboxOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
@@ -18,6 +17,7 @@ import {
 const { Text } = Typography;
 
 export default function AchievementPage() {
+  const { message } = App.useApp();
   const [data, setData] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
