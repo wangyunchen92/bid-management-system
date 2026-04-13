@@ -159,6 +159,20 @@ async def delete_section(
     return success(message="删除成功")
 
 
+# ========== 框架生成 ==========
+
+@router.post("/projects/{project_id}/generate-framework", summary="一键生成标书框架")
+async def generate_framework(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """根据标准模板+知识库自动生成标书章节框架"""
+    from app.services.bid_framework_service import bid_framework_service
+    sections = await bid_framework_service.generate_framework(db, project_id, user_id)
+    return success(data=sections, message=f"已生成 {len(sections)} 个章节")
+
+
 # ========== AI 功能 ==========
 
 @router.post("/sections/{section_id}/ai-generate", summary="AI 生成章节内容")

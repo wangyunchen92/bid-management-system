@@ -57,6 +57,8 @@ class BidSectionCreate(BaseModel):
     title: str = Field(..., max_length=200)
     content: Optional[str] = Field(default=None)
     sort_order: int = Field(default=0)
+    section_type: str = Field(default="AI_GENERATE")
+    template_id: Optional[int] = Field(default=None)
     assignee_id: Optional[int] = Field(default=None)
     status: str = Field(default="PENDING")
 
@@ -77,6 +79,8 @@ class BidSectionResponse(BaseModel):
     title: str
     content: Optional[str] = None
     sort_order: int = 0
+    section_type: str = "AI_GENERATE"
+    template_id: Optional[int] = None
     assignee_id: Optional[int] = None
     assignee_name: Optional[str] = None
     status: str = "PENDING"
