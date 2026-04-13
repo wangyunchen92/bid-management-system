@@ -50,9 +50,9 @@ STANDARD_FRAMEWORK = [
     },
     {
         "title": "商务条款偏离表",
-        "section_type": "TEMPLATE",
+        "section_type": "AI_GENERATE",
         "keywords": ["商务偏离", "商务响应"],
-        "description": "商务条款响应/偏离表",
+        "description": "商务条款响应/偏离表（AI 根据招标要求和公司情况生成）",
     },
     {
         "title": "业绩证明材料",
@@ -306,7 +306,8 @@ class BidFrameworkService:
             if new:
                 content = content.replace(old, new)
 
-        # 替换日期格式（2025年1月12日 / 2026年1月12日 等）
+        # 替换日期格式 — PDF 提取时日期可能被换行拆开
+        # 匹配：2025年1月12日 / 2026\n年\n04\n月\n13\n日
         content = re.sub(
             r'20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日',
             today.strftime('%Y年%m月%d日'),
@@ -326,6 +327,17 @@ class BidFrameworkService:
         }
         for placeholder, value in replacements.items():
             content = content.replace(placeholder, value)
+
+        # 清理 PDF 提取导致的日期换行问题
+        # "授权委托日期：\n2026\n年\n04\n月\n13\n日" → "授权委托日期：2026年04月13日"
+        content = re.sub(
+            r'(日期[：:]\s*)\n*(\d{4})\n*年\n*(\d{1,2})\n*月\n*(\d{1,2})\n*日',
+            lambda m: f'{m.group(1)}{m.group(2)}年{m.group(3)}月{m.group(4)}日',
+            content
+        )
+
+        # 清理连续空行（超过2个换行合并为2个）
+        content = re.sub(r'\n{3,}', '\n\n', content)
 
         return content
 
