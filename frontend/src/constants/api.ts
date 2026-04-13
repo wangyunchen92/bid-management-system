@@ -114,6 +114,7 @@ export const BID_API = {
   SECTION_AI_GENERATE_STREAM: (sectionId: number) => `${API_PREFIX}/bid/sections/${sectionId}/ai-generate-stream`,
   PROJECT_CHECK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/check`,
   PROJECT_EXPORT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/export`,
+  PROJECT_GENERATE_FRAMEWORK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/generate-framework`,
 } as const;
 
 export const TENDER_DOC_API = {

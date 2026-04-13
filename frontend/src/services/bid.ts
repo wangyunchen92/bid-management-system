@@ -108,6 +108,10 @@ export async function aiGenerateSectionStream(
   onDone();
 }
 
+export function generateBidFramework(projectId: number) {
+  return post<any[]>(BID_API.PROJECT_GENERATE_FRAMEWORK(projectId));
+}
+
 export function bidComplianceCheck(projectId: number, data: { tender_requirements?: string }) {
   return post<BidCheckResult>(BID_API.PROJECT_CHECK(projectId), data);
 }

@@ -292,6 +292,8 @@ interface BidSection {
   status: string;
   word_count: number;
   children?: BidSection[];
+  section_type?: string;  // TEMPLATE / MANUAL / LIBRARY / AI_GENERATE / ATTACHMENT
+  template_id?: number;
 }
 
 /** 招标文件解析结果 */
