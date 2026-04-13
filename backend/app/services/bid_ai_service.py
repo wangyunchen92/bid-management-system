@@ -14,6 +14,7 @@ from app.models.bid import BidProject, BidSection
 from app.models.tender import Tender
 from app.models.tender_document import TenderDocument
 from app.models.library import Qualification, Achievement, PersonnelCert, Product
+from app.models.knowledge import KnowledgeTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +41,17 @@ class BidAIService:
             for q in quals:
                 parts.append(f"- {q.cert_name}（{q.cert_type or ''}，编号：{q.cert_no or ''}）")
 
-        # 业绩案例
+        # 业绩案例（含描述和完成时间）
         result = await db.execute(select(Achievement).where(Achievement.is_deleted == 0).limit(10))
         achvs = result.scalars().all()
         if achvs:
             parts.append("\n【业绩案例】")
             for a in achvs:
-                amount = f"，金额{float(a.contract_amount)}万元" if a.contract_amount else ""
-                parts.append(f"- {a.project_name}（甲方：{a.client_name or ''}{amount}）")
+                amount = f"，合同金额{float(a.contract_amount)}万元" if a.contract_amount else ""
+                date = f"，完成时间{a.completion_date.strftime('%Y年%m月') if a.completion_date else ''}" if a.completion_date else ""
+                desc = f"，项目内容：{a.description}" if a.description else ""
+                has_proof = "，有合同证明材料" if a.file_path else ""
+                parts.append(f"- {a.project_name}（甲方：{a.client_name or ''}{amount}{date}{desc}{has_proof}）")
 
         # 人员证书
         result = await db.execute(select(PersonnelCert).where(PersonnelCert.is_deleted == 0).limit(20))
@@ -95,6 +99,41 @@ class BidAIService:
                 return f"【招标基本信息】\n项目名称：{tender.title}\n招标编号：{tender.tender_no or ''}\n招标单位：{tender.tender_unit or ''}\n预算金额：{float(tender.budget_amount) if tender.budget_amount else '未知'}万元"
 
         return ""
+
+    async def _get_knowledge_reference(self, db: AsyncSession, section_title: str) -> str:
+        """从知识库搜索与当前章节相关的模板，作为参考"""
+        from sqlalchemy import or_
+
+        # 用章节标题关键词搜索知识库
+        keywords = [w for w in section_title.replace('第', '').replace('章', '').replace('节', '').split() if len(w) > 1]
+        if not keywords:
+            keywords = [section_title]
+
+        query = select(KnowledgeTemplate).where(KnowledgeTemplate.is_deleted == 0)
+        conditions = []
+        for kw in keywords[:3]:  # 最多3个关键词
+            conditions.append(KnowledgeTemplate.title.contains(kw))
+            conditions.append(KnowledgeTemplate.tags.contains(kw))
+        if conditions:
+            query = query.where(or_(*conditions))
+        query = query.order_by(KnowledgeTemplate.usage_count.desc()).limit(3)
+
+        result = await db.execute(query)
+        templates = result.scalars().all()
+
+        if not templates:
+            return ""
+
+        parts = ["【知识库参考模板】"]
+        for t in templates:
+            # 截取前500字作为参考
+            content_preview = t.content[:500] if t.content else ""
+            parts.append(f"\n--- 模板：{t.title} ---")
+            parts.append(content_preview)
+            if t.content and len(t.content) > 500:
+                parts.append("...(已截取前500字)")
+
+        return "\n".join(parts)
 
     async def _get_other_sections_context(self, db: AsyncSession, project_id: int, current_section_id: int) -> str:
         """获取其他章节的标题和摘要，提供上下文"""
@@ -145,8 +184,10 @@ class BidAIService:
         else:
             tender_req = await self._get_tender_requirements(db, section.project_id)
         sections_ctx = await self._get_other_sections_context(db, section.project_id, section_id)
+        knowledge_ref = await self._get_knowledge_reference(db, section.title)
 
         additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
+        knowledge_part = f"\n{knowledge_ref}" if knowledge_ref else ""
 
         prompt = f"""你是一个专业的标书编写助手。请为以下标书章节撰写内容。
 
@@ -158,15 +199,17 @@ class BidAIService:
 {tender_req}
 
 {company_info}
+{knowledge_part}
 {additional_part}
 
 请撰写专业、详实的标书内容。要求：
 1. 内容要有针对性，紧扣招标要求
 2. 充分展示企业的资质和实力
-3. 引用具体的业绩案例和证书编号
-4. 语言正式规范，符合投标文件要求
-5. 篇幅适中（500-2000字）
-6. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
+3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号
+4. 如果知识库有相关参考模板，参考其结构和写法，但不要照搬
+5. 语言正式规范，符合投标文件要求
+6. 篇幅适中（500-2000字）
+7. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
 
         client = self._get_client()
         response = client.chat.completions.create(
@@ -208,7 +251,9 @@ class BidAIService:
         else:
             tender_req = await self._get_tender_requirements(db, section.project_id)
         sections_ctx = await self._get_other_sections_context(db, section.project_id, section_id)
+        knowledge_ref = await self._get_knowledge_reference(db, section.title)
         additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
+        knowledge_part = f"\n{knowledge_ref}" if knowledge_ref else ""
 
         prompt = f"""你是一个专业的标书编写助手。请为以下标书章节撰写内容。
 
@@ -220,15 +265,17 @@ class BidAIService:
 {tender_req}
 
 {company_info}
+{knowledge_part}
 {additional_part}
 
 请撰写专业、详实的标书内容。要求：
 1. 内容要有针对性，紧扣招标要求
 2. 充分展示企业的资质和实力
-3. 引用具体的业绩案例和证书编号
-4. 语言正式规范，符合投标文件要求
-5. 篇幅适中（500-2000字）
-6. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
+3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号
+4. 如果知识库有相关参考模板，参考其结构和写法，但不要照搬
+5. 语言正式规范，符合投标文件要求
+6. 篇幅适中（500-2000字）
+7. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
 
         client = self._get_client()
         stream = client.chat.completions.create(
