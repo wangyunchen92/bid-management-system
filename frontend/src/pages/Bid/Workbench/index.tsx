@@ -3,17 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, Empty, Spin,
-  Tooltip, Dropdown, Card, Drawer, Progress, List,  App } from 'antd';
+  Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
   FileSearchOutlined, RobotOutlined, SafetyCertificateOutlined, DownloadOutlined,
   CheckCircleFilled, WarningFilled, CloseCircleFilled,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection,
-  aiGenerateSectionStream, bidComplianceCheck, exportBidWord,
+  aiGenerateSectionStream, bidComplianceCheck, exportBidWord, generateBidFramework,
 } from '@/services/bid';
 import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
@@ -33,6 +34,15 @@ const SECTION_STATUS_DOT: Record<string, string> = {
   PENDING:   '#94a3b8',
   WRITING:   '#3b82f6',
   COMPLETED: '#22c55e',
+};
+
+// ── 章节类型配置 ──────────────────────────────────────────────
+const SECTION_TYPE_CONFIG: Record<string, { color: string; label: string; alertType: 'info' | 'warning' | 'success' | 'error'; alertMsg: string }> = {
+  TEMPLATE:    { color: '#3b82f6', label: '模板', alertType: 'info',    alertMsg: '此章节为格式模板，内容已从知识库自动填充，请核对后修改公司信息和项目信息。' },
+  MANUAL:      { color: '#f97316', label: '手动', alertType: 'warning', alertMsg: '此章节需要手动填写（如报价信息），请根据招标要求填写。' },
+  LIBRARY:     { color: '#22c55e', label: '资料', alertType: 'success', alertMsg: '此章节内容来自企业资料库，请在企业资料库中维护相关资质/业绩/人员/设备信息。' },
+  AI_GENERATE: { color: '#7c3aed', label: 'AI',   alertType: 'info',    alertMsg: '此章节可使用 AI 生成内容，点击下方「AI 生成」按钮。' },
+  ATTACHMENT:  { color: '#94a3b8', label: '附件', alertType: 'info',    alertMsg: '此章节为附件区，请上传相关扫描件。' },
 };
 
 // ── 工具函数：将章节树转为 Ant Tree DataNode ──────────────────
@@ -238,6 +248,9 @@ export default function BidWorkbenchPage() {
   // 导出状态
   const [exportLoading, setExportLoading] = useState(false);
 
+  // 一键生成框架状态
+  const [frameworkLoading, setFrameworkLoading] = useState(false);
+
   const contentChanged = useRef(false);
 
   // 加载项目信息
@@ -430,6 +443,20 @@ export default function BidWorkbenchPage() {
     }
   };
 
+  // 一键生成框架
+  const handleGenerateFramework = async () => {
+    setFrameworkLoading(true);
+    try {
+      await generateBidFramework(projectId);
+      message.success('框架生成成功，已自动填充章节目录');
+      await loadSections();
+    } catch {
+      message.error('框架生成失败，请重试');
+    } finally {
+      setFrameworkLoading(false);
+    }
+  };
+
   // 渲染树节点标题
   const renderTreeTitle = (node: TreeDataNode & { data?: BidSection }) => {
     const section = node.data;
@@ -488,6 +515,22 @@ export default function BidWorkbenchPage() {
               display: 'inline-block',
             }}
           />
+          {section.section_type && SECTION_TYPE_CONFIG[section.section_type] && (
+            <Tag
+              style={{
+                fontSize: 11,
+                padding: '0 4px',
+                lineHeight: '16px',
+                marginRight: 0,
+                color: SECTION_TYPE_CONFIG[section.section_type].color,
+                borderColor: SECTION_TYPE_CONFIG[section.section_type].color,
+                background: 'transparent',
+                flexShrink: 0,
+              }}
+            >
+              {SECTION_TYPE_CONFIG[section.section_type].label}
+            </Tag>
+          )}
           <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {section.title}
           </span>
@@ -587,7 +630,7 @@ export default function BidWorkbenchPage() {
           }}
         >
           {/* 招标文件解析按钮 */}
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ padding: '8px 12px', borderBottom: sections.length === 0 ? 'none' : '1px solid #e2e8f0' }}>
             <Button
               type="dashed"
               block
@@ -598,6 +641,21 @@ export default function BidWorkbenchPage() {
               招标文件解析
             </Button>
           </div>
+          {/* 一键生成框架按钮（仅在章节数为 0 时显示） */}
+          {sections.length === 0 && (
+            <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #e2e8f0' }}>
+              <Button
+                type="dashed"
+                block
+                icon={<ThunderboltOutlined />}
+                loading={frameworkLoading}
+                onClick={handleGenerateFramework}
+                style={{ color: '#0d9488', borderColor: '#0d9488' }}
+              >
+                一键生成框架
+              </Button>
+            </div>
+          )}
 
           <div style={{ padding: '12px 12px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text strong style={{ fontSize: 13, color: '#475569' }}>章节目录</Text>
@@ -647,6 +705,23 @@ export default function BidWorkbenchPage() {
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 章节类型提示 */}
+              {selectedSection.section_type && SECTION_TYPE_CONFIG[selectedSection.section_type] && (
+                <Alert
+                  type={SECTION_TYPE_CONFIG[selectedSection.section_type].alertType}
+                  showIcon
+                  closable
+                  message={SECTION_TYPE_CONFIG[selectedSection.section_type].alertMsg}
+                  style={{
+                    borderColor: selectedSection.section_type === 'AI_GENERATE' ? '#c4b5fd' :
+                                 selectedSection.section_type === 'ATTACHMENT' ? '#cbd5e1' : undefined,
+                    background: selectedSection.section_type === 'AI_GENERATE' ? '#f5f3ff' :
+                                selectedSection.section_type === 'ATTACHMENT' ? '#f8fafc' : undefined,
+                    color: selectedSection.section_type === 'AI_GENERATE' ? '#6d28d9' :
+                           selectedSection.section_type === 'ATTACHMENT' ? '#64748b' : undefined,
+                  }}
+                />
+              )}
               {/* 章节信息栏 */}
               <div style={{
                 padding: '16px 20px',
