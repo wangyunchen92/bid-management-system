@@ -263,7 +263,7 @@ class BidFrameworkService:
         return None
 
     async def _fill_template(self, db: AsyncSession, template_id: int, project: BidProject) -> str:
-        """从知识库模板填充内容，替换占位符"""
+        """用 AI 将模板中的项目信息替换为当前项目信息"""
         result = await db.execute(
             select(KnowledgeTemplate).where(KnowledgeTemplate.id == template_id)
         )
@@ -271,25 +271,64 @@ class BidFrameworkService:
         if not template or not template.content:
             return ""
 
-        content = template.content
+        # 获取当前招标项目信息
+        tender_info = ""
+        if project.tender_id:
+            from app.models.tender import Tender
+            tender_result = await db.execute(select(Tender).where(Tender.id == project.tender_id))
+            tender = tender_result.scalar_one_or_none()
+            if tender:
+                tender_info = f"""项目名称：{tender.title or project.title}
+招标编号：{tender.tender_no or ''}
+招标单位：{tender.tender_unit or ''}
+预算金额：{float(tender.budget_amount) if tender.budget_amount else ''}万元"""
 
-        # 替换常见占位符
+        if not tender_info:
+            tender_info = f"项目名称：{project.title}"
+
         from datetime import datetime
         today = datetime.now()
 
-        replacements = {
-            "{项目名称}": project.title or "",
-            "{公司名称}": "合肥新安彩印包装有限公司",  # TODO: 从系统配置或企业信息获取
-            "{日期}": today.strftime("%Y年%m月%d日"),
-            "{年}": str(today.year),
-            "{月}": str(today.month),
-            "{日}": str(today.day),
-        }
+        from openai import OpenAI
+        from app.config import settings
 
-        for placeholder, value in replacements.items():
-            content = content.replace(placeholder, value)
+        try:
+            client = OpenAI(api_key=settings.AI_API_KEY, base_url=settings.AI_BASE_URL)
+            response = client.chat.completions.create(
+                model=settings.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是一个标书编辑助手。请将下面的模板内容中的项目特定信息（项目名称、招标编号、招标单位、日期等）替换为新项目的信息。保持文档的格式和结构不变，只替换项目相关的信息。供应商信息保持不变。"},
+                    {"role": "user", "content": f"""请将以下模板中的项目信息替换为新项目信息。
 
-        return content
+新项目信息：
+{tender_info}
+供应商：合肥新安彩印包装有限公司
+日期：{today.strftime('%Y年%m月%d日')}
+
+模板内容：
+{template.content[:3000]}
+
+请直接输出替换后的完整内容，不要加任何说明。"""},
+                ],
+                max_tokens=4096,
+                temperature=0.1,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"AI 模板填充失败: {e}")
+            # 降级：简单文本替换
+            content = template.content
+            replacements = {
+                "{项目名称}": project.title or "",
+                "{公司名称}": "合肥新安彩印包装有限公司",
+                "{日期}": today.strftime("%Y年%m月%d日"),
+                "{年}": str(today.year),
+                "{月}": str(today.month),
+                "{日}": str(today.day),
+            }
+            for placeholder, value in replacements.items():
+                content = content.replace(placeholder, value)
+            return content
 
 
 bid_framework_service = BidFrameworkService()
