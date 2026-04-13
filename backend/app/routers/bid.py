@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.deps import get_db, get_current_user_id, require_super_admin
@@ -171,6 +172,53 @@ async def generate_framework(
     from app.services.bid_framework_service import bid_framework_service
     sections = await bid_framework_service.generate_framework(db, project_id, user_id)
     return success(data=sections, message=f"已生成 {len(sections)} 个章节")
+
+
+# ========== 批量 AI 生成 ==========
+
+@router.post("/projects/{project_id}/batch-ai-generate", summary="批量生成所有AI章节")
+async def batch_ai_generate(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """SSE 流式批量生成所有 AI_GENERATE 类型章节"""
+    from app.models.bid import BidSection
+
+    # 查所有 AI_GENERATE 章节
+    result = await db.execute(
+        select(BidSection).where(
+            BidSection.project_id == project_id,
+            BidSection.section_type == "AI_GENERATE",
+            BidSection.is_deleted == 0,
+        ).order_by(BidSection.sort_order.asc())
+    )
+    sections = result.scalars().all()
+
+    if not sections:
+        return success(data=[], message="没有需要 AI 生成的章节")
+
+    async def event_generator():
+        for i, section in enumerate(sections):
+            # 通知前端当前进度
+            yield f"data: {json.dumps({'type': 'progress', 'current': i+1, 'total': len(sections), 'section_title': section.title}, ensure_ascii=False)}\n\n"
+
+            # 生成内容
+            try:
+                content = await bid_ai_service.generate_section_content(db, section.id)
+                # 保存到章节
+                section.content = content
+                section.word_count = len(content)
+                section.status = "COMPLETED"
+                await db.flush()
+
+                yield f"data: {json.dumps({'type': 'section_done', 'section_id': section.id, 'section_title': section.title, 'word_count': len(content)}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'section_error', 'section_id': section.id, 'section_title': section.title, 'error': str(e)}, ensure_ascii=False)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'total': len(sections)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ========== AI 功能 ==========

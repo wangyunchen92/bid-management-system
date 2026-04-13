@@ -115,6 +115,7 @@ export const BID_API = {
   PROJECT_CHECK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/check`,
   PROJECT_EXPORT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/export`,
   PROJECT_GENERATE_FRAMEWORK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/generate-framework`,
+  PROJECT_BATCH_AI: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/batch-ai-generate`,
 } as const;
 
 export const TENDER_DOC_API = {

@@ -112,6 +112,52 @@ export function generateBidFramework(projectId: number) {
   return post<any[]>(BID_API.PROJECT_GENERATE_FRAMEWORK(projectId));
 }
 
+export async function batchAiGenerate(
+  projectId: number,
+  onProgress: (current: number, total: number, title: string) => void,
+  onSectionDone: (sectionId: number, title: string, wordCount: number) => void,
+  onDone: (total: number) => void,
+  onError: (title: string, err: string) => void,
+) {
+  const token = localStorage.getItem('bid_system_access_token');
+  const response = await fetch(BID_API.PROJECT_BATCH_AI(projectId), {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    onError('', `请求失败: ${response.status}`);
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) { onError('', '无法读取响应流'); return; }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          if (data.type === 'progress') onProgress(data.current, data.total, data.section_title);
+          if (data.type === 'section_done') onSectionDone(data.section_id, data.section_title, data.word_count);
+          if (data.type === 'section_error') onError(data.section_title, data.error);
+          if (data.type === 'done') onDone(data.total);
+        } catch { /* skip */ }
+      }
+    }
+  }
+}
+
 export function bidComplianceCheck(projectId: number, data: { tender_requirements?: string }) {
   return post<BidCheckResult>(BID_API.PROJECT_CHECK(projectId), data);
 }
