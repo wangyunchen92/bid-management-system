@@ -90,7 +90,13 @@
       "Bash(pip show:*)",
       "Bash(grep -n \"error\\\\|500\\\\|404\\\\|422\\\\|traceback\" /private/tmp/claude-501/-Users-wangyunchen-agents-----/c422d1e7-a637-46b5-aa58-e82dc332aea7/tasks/*.output)",
       "Bash(echo \"Backend PID: $!\" sleep 5 curl -s http://localhost:8002/api/v1/auth/login -X POST -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"admin123\"}')",
-      "Bash(python -c \"from app.services.library_ai_service import library_ai_service; print\\('library_ai_service import OK'\\)\")"
+      "Bash(python -c \"from app.services.library_ai_service import library_ai_service; print\\('library_ai_service import OK'\\)\")",
+      "WebFetch(domain:www.zhipin.com)",
+      "WebFetch(domain:www.liepin.com)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "Bash(brew install:*)",
+      "Bash(gh --version)"
     ]
   }
 }
