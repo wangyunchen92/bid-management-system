@@ -1,6 +1,8 @@
 """
 招标文件 AI 智能解析 — 调用火山引擎豆包大模型
 """
+import base64
+import io
 import json
 import logging
 from typing import Optional
@@ -66,6 +68,31 @@ TENDER_PARSE_PROMPT = """你是一个专业的招标文件解析助手。请从�
 3. 日期尽量转换为标准格式
 4. risk_alerts 非常重要，请仔细检查废标条件"""
 
+CHAPTER_TEMPLATE_EXTRACT_PROMPT = """你是招标文件分析助手。从招标文件中为以下投标章节抽取对应的模板原文。
+
+任务：
+1. 找到招标文件中"响应文件格式""投标文件格式""附件""格式一/二/三..."等部分
+2. 为每个章节匹配对应的模板（如"磋商响应函"对应"格式一：响应函"）
+3. 把模板原文**原样**摘出（保留表格、空白下划线 ___、签章位 (签章) 等）
+4. 推断每章类型：
+   - TEMPLATE：固定格式文件（响应函、声明函、承诺函、授权委托书、身份证明）
+   - MANUAL：需手动填写数据（报价表、价格表、分项报价）
+   - AI_GENERATE：需撰写方案（技术方案、服务方案、商务/技术偏离表）
+   - LIBRARY：附资料（业绩证明、人员清单、资质证书、设备清单）
+
+严格按以下 JSON 输出（不要包裹 ```）：
+{
+  "chapters": [
+    {
+      "title": "磋商响应函",
+      "section_type": "TEMPLATE",
+      "template": "...原文模板，找不到时填空字符串...",
+      "matched": true
+    }
+  ]
+}
+"""
+
 
 class TenderAIParser:
 
@@ -79,6 +106,74 @@ class TenderAIParser:
                 base_url=settings.AI_BASE_URL,
             )
         return self.client
+
+    def ocr_single_page(self, pdf_path: str, page_index: int) -> str:
+        """OCR 单页：渲染、压缩、调用视觉模型识别。返回页面文字。"""
+        import fitz
+        from PIL import Image
+
+        vision_model = getattr(settings, "AI_VISION_MODEL", None)
+        if not vision_model:
+            raise Exception("视觉模型未配置（AI_VISION_MODEL 为空），无法 OCR 扫描件")
+
+        client = self._get_client()
+        doc = fitz.open(pdf_path)
+        try:
+            page = doc[page_index]
+            pix = page.get_pixmap(dpi=150)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            if img.width > 1500:
+                ratio = 1500 / img.width
+                img = img.resize((1500, int(img.height * ratio)), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=85, optimize=True)
+            img_b64 = base64.b64encode(buf.getvalue()).decode()
+        finally:
+            doc.close()
+
+        response = client.chat.completions.create(
+            model=vision_model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "请把这页招标文件的所有文字（包括表格内容）完整地识别出来，按原顺序输出。不要总结，不要解释，只输出原文。"},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                ],
+            }],
+            max_tokens=4096,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
+
+    def get_pdf_page_count(self, pdf_path: str) -> int:
+        import fitz
+        doc = fitz.open(pdf_path)
+        n = len(doc)
+        doc.close()
+        return n
+
+    def ocr_pdf_with_vision(self, pdf_path: str, max_pages: int = 100) -> str:
+        """对扫描件 PDF 用视觉模型逐页 OCR，返回拼接后的全文（无进度回调版本）"""
+        total_pages = self.get_pdf_page_count(pdf_path)
+        pages_to_process = min(total_pages, max_pages)
+        logger.info(f"开始 OCR：共 {total_pages} 页，处理前 {pages_to_process} 页")
+
+        all_text = []
+        for i in range(pages_to_process):
+            try:
+                page_text = self.ocr_single_page(pdf_path, i)
+                all_text.append(f"--- 第 {i+1} 页 ---\n{page_text}")
+                logger.info(f"OCR 第 {i+1}/{pages_to_process} 页完成（{len(page_text)} 字）")
+            except Exception as e:
+                logger.warning(f"OCR 第 {i+1} 页失败: {e}")
+                all_text.append(f"--- 第 {i+1} 页 ---\n[OCR 失败]")
+
+        result = "\n\n".join(all_text)
+        if total_pages > pages_to_process:
+            result += f"\n\n[文档共 {total_pages} 页，仅处理了前 {pages_to_process} 页]"
+        return result
 
     def parse(self, text: str) -> dict:
         """调用 AI 解析招标文件文本，返回结构化结果"""
@@ -114,6 +209,50 @@ class TenderAIParser:
             return {"error": "AI 返回格式异常", "raw_response": result_text[:500]}
         except Exception as e:
             logger.error(f"AI 解析失败: {e}")
+            raise
+
+    def extract_chapter_templates(self, raw_text: str, chapter_titles: list) -> dict:
+        """从招标文件原文中为指定章节抽取模板原文。
+        返回 {"chapters": [{"title", "section_type", "template", "matched"}]}
+        """
+        if not chapter_titles:
+            return {"chapters": []}
+
+        client = self._get_client()
+
+        max_chars = 150000
+        if len(raw_text) > max_chars:
+            raw_text = raw_text[:max_chars] + "\n\n[文档过长，已截断]"
+
+        chapter_list_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(chapter_titles))
+        user_prompt = f"投标章节列表：\n{chapter_list_text}\n\n招标文件原文：\n{raw_text}"
+
+        try:
+            response = client.chat.completions.create(
+                model=settings.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": CHAPTER_TEMPLATE_EXTRACT_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=8192,
+                temperature=0.1,
+            )
+            result_text = response.choices[0].message.content.strip()
+
+            if result_text.startswith("```"):
+                result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
+                if result_text.endswith("```"):
+                    result_text = result_text[:-3]
+
+            data = json.loads(result_text)
+            if not isinstance(data, dict) or "chapters" not in data:
+                raise ValueError("AI 返回缺少 chapters 字段")
+            return data
+        except json.JSONDecodeError as e:
+            logger.error(f"AI 模板抽取 JSON 解析失败: {e}")
+            raise Exception(f"AI 返回格式异常: {e}")
+        except Exception as e:
+            logger.error(f"AI 模板抽取失败: {e}")
             raise
 
 
