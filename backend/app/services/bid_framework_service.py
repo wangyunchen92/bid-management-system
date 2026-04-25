@@ -3,10 +3,8 @@
 根据招标文件解析结果 + 标准模板，一键生成标书章节结构
 """
 
-import asyncio
 import json
 import logging
-import time
 from typing import AsyncIterator, List, Optional
 
 from sqlalchemy import select
@@ -271,16 +269,14 @@ class BidFrameworkService:
     ) -> AsyncIterator[dict]:
         """基于招标文件解析结果生成章节框架。异步生成器，yield SSE 事件。
 
+        模板原文已经在招标文件解析阶段（tender_ai_parser.parse）一并抽取，
+        此方法直接读取 parse_result 中的结构化 chapters，不再重复调 AI。
+
         事件类型：
-          - extract_start: {chapter_count}
-          - extract_done: {matched_count, duration_ms}
-          - extract_failed: {message, duration_ms}（降级，仍继续创建空章节）
           - section_created: {title, section_type, has_content}
           - done: {total, with_content}
           - error: {message}
         """
-        from app.services.tender_ai_parser import tender_ai_parser
-
         # 1. 校验项目存在
         proj_result = await db.execute(
             select(BidProject).where(BidProject.id == project_id, BidProject.is_deleted == 0)
@@ -306,9 +302,6 @@ class BidFrameworkService:
         if not td:
             yield {"type": "error", "message": "招标文件不存在"}
             return
-        if not td.raw_text:
-            yield {"type": "error", "message": "招标文件未解析完成（缺少 raw_text）"}
-            return
         if not td.parse_result:
             yield {"type": "error", "message": "招标文件未解析完成（缺少解析结果）"}
             return
@@ -319,38 +312,32 @@ class BidFrameworkService:
             yield {"type": "error", "message": "招标文件解析结果格式异常"}
             return
 
-        chapter_titles = (parse_result.get("bid_document_requirements") or {}).get("chapters") or []
-        if not chapter_titles:
+        chapters_raw = (parse_result.get("bid_document_requirements") or {}).get("chapters") or []
+        if not chapters_raw:
             yield {"type": "error", "message": "招标文件未识别到章节列表"}
             return
 
-        # 4. AI 抽取模板（带降级）
-        yield {"type": "extract_start", "chapter_count": len(chapter_titles)}
-
+        # 4. 归一化章节格式（兼容旧版只有标题字符串、新版结构化对象）
         ai_chapters = []
-        t0 = time.time()
-        try:
-            extract_result = await asyncio.to_thread(
-                tender_ai_parser.extract_chapter_templates, td.raw_text, chapter_titles
-            )
-            ai_chapters = extract_result.get("chapters", [])
-            matched_count = sum(1 for c in ai_chapters if c.get("matched"))
-            duration_ms = int((time.time() - t0) * 1000)
-            yield {"type": "extract_done", "matched_count": matched_count, "duration_ms": duration_ms}
-        except Exception as e:
-            duration_ms = int((time.time() - t0) * 1000)
-            logger.warning(f"AI 模板抽取失败，降级为空章节: {e}")
-            yield {"type": "extract_failed", "message": str(e), "duration_ms": duration_ms}
-            # 降级：用解析章节构造空模板
-            ai_chapters = [
-                {
-                    "title": t,
-                    "section_type": self._infer_type(t),
+        for c in chapters_raw:
+            if isinstance(c, str):
+                ai_chapters.append({
+                    "title": c,
+                    "section_type": self._infer_type(c),
                     "template": "",
                     "matched": False,
-                }
-                for t in chapter_titles
-            ]
+                })
+            elif isinstance(c, dict) and c.get("title"):
+                ai_chapters.append({
+                    "title": c["title"],
+                    "section_type": c.get("section_type") or self._infer_type(c["title"]),
+                    "template": c.get("template") or "",
+                    "matched": bool(c.get("matched")),
+                })
+
+        if not ai_chapters:
+            yield {"type": "error", "message": "招标文件章节格式异常"}
+            return
 
         # 5. 合并章节（解析章节 + ESSENTIAL_FALLBACK 补充 + 补充信息章节）
         merged = self._merge_chapters_for_tender(ai_chapters)

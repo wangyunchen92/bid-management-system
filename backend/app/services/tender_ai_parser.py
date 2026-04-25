@@ -57,7 +57,14 @@ TENDER_PARSE_PROMPT = """你是一个专业的招标文件解析助手。请从�
     "format": "投标文件格式要求",
     "copies": "份数要求",
     "seal_requirements": "盖章签字要求",
-    "chapters": ["投标文件需要包含的章节"]
+    "chapters": [
+      {
+        "title": "章节标题（如：磋商响应函）",
+        "section_type": "TEMPLATE/MANUAL/AI_GENERATE/LIBRARY",
+        "template": "招标文件中提供的模板原文，原样保留格式（找不到时填空字符串）",
+        "matched": true
+      }
+    ]
   },
   "risk_alerts": ["可能导致废标的注意事项列表，尤其关注容易忽略的条款"]
 }
@@ -66,32 +73,13 @@ TENDER_PARSE_PROMPT = """你是一个专业的招标文件解析助手。请从�
 1. 如果某个字段在文件中没有找到，填 null
 2. budget_amount 填数字（单位万元），如果无法确定数字填 null 但在 budget_amount_text 写原文
 3. 日期尽量转换为标准格式
-4. risk_alerts 非常重要，请仔细检查废标条件"""
-
-CHAPTER_TEMPLATE_EXTRACT_PROMPT = """你是招标文件分析助手。从招标文件中为以下投标章节抽取对应的模板原文。
-
-任务：
-1. 找到招标文件中"响应文件格式""投标文件格式""附件""格式一/二/三..."等部分
-2. 为每个章节匹配对应的模板（如"磋商响应函"对应"格式一：响应函"）
-3. 把模板原文**原样**摘出（保留表格、空白下划线 ___、签章位 (签章) 等）
-4. 推断每章类型：
+4. risk_alerts 非常重要，请仔细检查废标条件
+5. chapters 中的 template 字段：找招标文件中"响应文件格式""投标文件格式""附件""格式一/二/三..."等部分，把对应章节的模板原文原样摘出（保留表格、空白下划线 ___、签章位 (签章) 等）；招标文件没提供模板则填空字符串并把 matched 设为 false
+6. section_type 推断规则：
    - TEMPLATE：固定格式文件（响应函、声明函、承诺函、授权委托书、身份证明）
    - MANUAL：需手动填写数据（报价表、价格表、分项报价）
    - AI_GENERATE：需撰写方案（技术方案、服务方案、商务/技术偏离表）
-   - LIBRARY：附资料（业绩证明、人员清单、资质证书、设备清单）
-
-严格按以下 JSON 输出（不要包裹 ```）：
-{
-  "chapters": [
-    {
-      "title": "磋商响应函",
-      "section_type": "TEMPLATE",
-      "template": "...原文模板，找不到时填空字符串...",
-      "matched": true
-    }
-  ]
-}
-"""
+   - LIBRARY：附资料（业绩证明、人员清单、资质证书、设备清单）"""
 
 
 class TenderAIParser:
@@ -191,7 +179,7 @@ class TenderAIParser:
                     {"role": "system", "content": TENDER_PARSE_PROMPT},
                     {"role": "user", "content": f"请解析以下招标文件：\n\n{text}"},
                 ],
-                max_tokens=8192,
+                max_tokens=16384,
                 temperature=0.1,
             )
 
@@ -210,53 +198,5 @@ class TenderAIParser:
         except Exception as e:
             logger.error(f"AI 解析失败: {e}")
             raise
-
-    def extract_chapter_templates(self, raw_text: str, chapter_titles: list[str]) -> dict:
-        """从招标文件原文中为指定章节抽取模板原文。
-        返回 {"chapters": [{"title", "section_type", "template", "matched"}]}
-        """
-        if not chapter_titles:
-            return {"chapters": []}
-
-        client = self._get_client()
-
-        max_chars = 150000
-        if len(raw_text) > max_chars:
-            raw_text = raw_text[:max_chars] + "\n\n[文档过长，已截断]"
-
-        chapter_list_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(chapter_titles))
-        user_prompt = f"投标章节列表：\n{chapter_list_text}\n\n招标文件原文：\n{raw_text}"
-
-        try:
-            response = client.chat.completions.create(
-                model=settings.AI_MODEL,
-                messages=[
-                    {"role": "system", "content": CHAPTER_TEMPLATE_EXTRACT_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                max_tokens=8192,
-                temperature=0.1,
-            )
-            result_text = response.choices[0].message.content.strip()
-
-            if result_text.startswith("```"):
-                result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]
-
-            data = json.loads(result_text)
-            if not isinstance(data, dict) or "chapters" not in data:
-                raise ValueError("AI 返回缺少 chapters 字段")
-            return data
-        except json.JSONDecodeError as e:
-            logger.error(f"AI 模板抽取 JSON 解析失败: {e}")
-            raise Exception(f"AI 返回格式异常: {e}")
-        except ValueError as e:
-            logger.error(f"AI 模板抽取 schema 校验失败: {e}")
-            raise Exception(f"AI 返回内容不符合预期: {e}")
-        except Exception as e:
-            logger.error(f"AI 模板抽取失败: {e}")
-            raise
-
 
 tender_ai_parser = TenderAIParser()
