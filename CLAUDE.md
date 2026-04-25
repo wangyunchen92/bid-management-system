@@ -362,11 +362,14 @@ Nginx(:80)
 - 成本：约 ¥1/份标书（含解析+生成+检测），月产30份约 ¥30
 
 #### 招标文件章节模板抽取（2026-04-25）
-- 改造「一键填入招标信息」按钮：解析招标文件后，AI 二次抽取每章对应的模板原文（响应函格式、报价表样式、承诺函格式等），直接填入 `section.content`，不再只生成空章节
-- 后端：`tender_ai_parser.extract_chapter_templates()` AI 抽取方法 + `bid_framework_service.generate_from_tender()` 异步生成器（SSE 流式，用 `asyncio.to_thread` 防阻塞）
+- 改造「一键填入招标信息」按钮：解析招标文件时**一次性**把每章对应的模板原文（响应函格式、报价表样式、承诺函格式等）一并抽出，直接填入 `section.content`，不再只生成空章节
+- 设计演进：
+  - 初版方案：第一次解析只拿章节名 + 用户点「一键填入」时第二次 AI 调用抽取模板 → 复杂、慢、贵
+  - **最终方案**：合并为单次 AI 调用，模板抽取直接写入 parse_result，框架生成只读缓存零 AI 调用
+- 后端：`tender_ai_parser.parse()` 的 prompt 中 `chapters` 字段输出 `[{title, section_type, template, matched}]`，max_tokens 提至 16384；`bid_framework_service.generate_from_tender()` 直接读 parse_result.chapters，兼容旧版字符串数组
 - 章节合并规则：解析章节 + 必备 fallback（中小企业声明函/无重大违法记录声明函/法定代表人身份证明书/授权委托书）+ 末尾「补充信息」LIBRARY 章节
-- AI 抽取失败可降级为创建空章节框架，不影响主流程
-- 前端：`TenderDocParser` 进度面板（extract → create → done 三阶段）+ `Workbench` 中「一键生成框架（标准模板）」按钮在已解析项目中隐藏
+- 前端：`TenderDocParser` 简化进度面板（生成瞬时完成无需阶段提示）+ `Workbench` 中「一键生成框架（标准模板）」按钮在已解析项目中隐藏
+- 升级时机：旧的招标文件解析结果只有章节名没有模板，需重新上传招标文件即可拿到带模板的解析结果
 - 设计文档：`docs/superpowers/specs/2026-04-25-tender-template-extract-design.md`
 - 实施计划：`docs/superpowers/plans/2026-04-25-tender-template-extract.md`
 - 测试报告：`docs/test-reports/2026-04-25-tender-template-extract-test-report.md`
