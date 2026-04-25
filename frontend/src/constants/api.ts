@@ -1,4 +1,5 @@
-const API_PREFIX = '/api/v1';
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const API_PREFIX = `${BASE}/api/v1`;
 
 export const AUTH_API = {
   LOGIN: `${API_PREFIX}/auth/login`,
@@ -113,9 +114,16 @@ export const BID_API = {
   SECTION_AI_GENERATE: (sectionId: number) => `${API_PREFIX}/bid/sections/${sectionId}/ai-generate`,
   SECTION_AI_GENERATE_STREAM: (sectionId: number) => `${API_PREFIX}/bid/sections/${sectionId}/ai-generate-stream`,
   PROJECT_CHECK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/check`,
+  PROJECT_PREVIEW: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/preview`,
   PROJECT_EXPORT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/export`,
   PROJECT_GENERATE_FRAMEWORK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/generate-framework`,
+  PROJECT_FILL_LIBRARY: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/fill-library-sections`,
   PROJECT_BATCH_AI: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/batch-ai-generate`,
+  PROJECT_FRAMEWORK_FROM_TENDER: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/framework-from-tender`,
+  // 标书检测
+  PROJECT_DETECT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect`,
+  PROJECT_DETECT_REPORTS: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect/reports`,
+  PROJECT_DETECT_REPORT_DETAIL: (projectId: number, reportId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect/reports/${reportId}`,
 } as const;
 
 export const TENDER_DOC_API = {
