@@ -211,7 +211,7 @@ class TenderAIParser:
             logger.error(f"AI 解析失败: {e}")
             raise
 
-    def extract_chapter_templates(self, raw_text: str, chapter_titles: list) -> dict:
+    def extract_chapter_templates(self, raw_text: str, chapter_titles: list[str]) -> dict:
         """从招标文件原文中为指定章节抽取模板原文。
         返回 {"chapters": [{"title", "section_type", "template", "matched"}]}
         """
@@ -251,6 +251,9 @@ class TenderAIParser:
         except json.JSONDecodeError as e:
             logger.error(f"AI 模板抽取 JSON 解析失败: {e}")
             raise Exception(f"AI 返回格式异常: {e}")
+        except ValueError as e:
+            logger.error(f"AI 模板抽取 schema 校验失败: {e}")
+            raise Exception(f"AI 返回内容不符合预期: {e}")
         except Exception as e:
             logger.error(f"AI 模板抽取失败: {e}")
             raise
