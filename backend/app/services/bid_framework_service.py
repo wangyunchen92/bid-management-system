@@ -3,7 +3,10 @@
 根据招标文件解析结果 + 标准模板，一键生成标书章节结构
 """
 
+import asyncio
+import json
 import logging
+import time
 from typing import AsyncIterator, List, Optional
 
 from sqlalchemy import select
@@ -271,14 +274,11 @@ class BidFrameworkService:
         事件类型：
           - extract_start: {chapter_count}
           - extract_done: {matched_count, duration_ms}
-          - extract_failed: {message}（降级，仍继续创建空章节）
+          - extract_failed: {message, duration_ms}（降级，仍继续创建空章节）
           - section_created: {title, section_type, has_content}
           - done: {total, with_content}
           - error: {message}
         """
-        import json as _json
-        import time
-        from app.models.tender_document import TenderDocument
         from app.services.tender_ai_parser import tender_ai_parser
 
         # 1. 校验项目存在
@@ -291,9 +291,8 @@ class BidFrameworkService:
             return
 
         # 2. 校验项目是否已有章节
-        from app.models.bid import BidSection as _BS
         existing = await db.execute(
-            select(_BS).where(_BS.project_id == project_id, _BS.is_deleted == 0).limit(1)
+            select(BidSection).where(BidSection.project_id == project_id, BidSection.is_deleted == 0).limit(1)
         )
         if existing.scalar_one_or_none():
             yield {"type": "error", "message": "项目已有章节，请先清空再生成"}
@@ -315,7 +314,7 @@ class BidFrameworkService:
             return
 
         try:
-            parse_result = _json.loads(td.parse_result) if isinstance(td.parse_result, str) else td.parse_result
+            parse_result = json.loads(td.parse_result) if isinstance(td.parse_result, str) else td.parse_result
         except Exception:
             yield {"type": "error", "message": "招标文件解析结果格式异常"}
             return
@@ -331,7 +330,9 @@ class BidFrameworkService:
         ai_chapters = []
         t0 = time.time()
         try:
-            extract_result = tender_ai_parser.extract_chapter_templates(td.raw_text, chapter_titles)
+            extract_result = await asyncio.to_thread(
+                tender_ai_parser.extract_chapter_templates, td.raw_text, chapter_titles
+            )
             ai_chapters = extract_result.get("chapters", [])
             matched_count = sum(1 for c in ai_chapters if c.get("matched"))
             duration_ms = int((time.time() - t0) * 1000)
