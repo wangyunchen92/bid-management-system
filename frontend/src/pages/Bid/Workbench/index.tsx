@@ -3,21 +3,66 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, Empty, Spin,
-  Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App } from 'antd';
+  Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App, Tabs } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
   FileSearchOutlined, RobotOutlined, SafetyCertificateOutlined, DownloadOutlined,
   CheckCircleFilled, WarningFilled, CloseCircleFilled,
-  ThunderboltOutlined,
+  ThunderboltOutlined, EyeOutlined, DatabaseOutlined,
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection,
-  aiGenerateSectionStream, bidComplianceCheck, exportBidWord, generateBidFramework, batchAiGenerate,
+  aiGenerateSectionStream, exportBidWord, generateBidFramework, batchAiGenerate,
+  previewBidDocument, fillLibrarySections,
+  runBidDetection, getDetectReports, getDetectReportDetail,
 } from '@/services/bid';
+import type { DetectItem, DetectReport, DetectReportListItem } from '@/services/bid';
 import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
+import { LIBRARY_API } from '@/constants/api';
+
+/** 将内容中的 [附件:path:name] 标记渲染为可点击链接 */
+function renderContentWithAttachments(text: string): React.ReactNode {
+  const parts = text.split(/(\[附件:[^\]]+\])/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    const match = part.match(/\[附件:([^:]+):([^\]]+)\]/);
+    if (match) {
+      const [, filePath, fileName] = match;
+      const url = LIBRARY_API.FILE_URL(filePath);
+      const ext = filePath.split('.').pop()?.toLowerCase();
+      const isImage = ['jpg', 'jpeg', 'png'].includes(ext || '');
+      return (
+        <span key={i}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 8px',
+              background: '#f0fdfa',
+              border: '1px solid #99f6e4',
+              borderRadius: 4,
+              color: '#0d9488',
+              fontSize: 13,
+              textDecoration: 'none',
+              margin: '2px 0',
+            }}
+          >
+            {isImage ? '🖼' : '📄'} {fileName}
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>（点击查看）</span>
+          </a>
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -238,12 +283,12 @@ export default function BidWorkbenchPage() {
   const [aiGenPreviewOpen, setAiGenPreviewOpen] = useState(false);
   const [aiGenResult, setAiGenResult] = useState('');
 
-  // 废标检查状态
-  const [checkDrawerOpen, setCheckDrawerOpen] = useState(false);
-  const [checkLoading, setCheckLoading] = useState(false);
-  const [checkResult, setCheckResult] = useState<BidCheckResult | null>(null);
-  const [checkTenderReq, setCheckTenderReq] = useState('');
-  const [checkInputOpen, setCheckInputOpen] = useState(false);
+  // 标书检测状态
+  const [detectDrawerOpen, setDetectDrawerOpen] = useState(false);
+  const [detectLoading, setDetectLoading] = useState(false);
+  const [detectProgress, setDetectProgress] = useState('');
+  const [detectReport, setDetectReport] = useState<DetectReport | null>(null);
+  const [detectHistory, setDetectHistory] = useState<DetectReportListItem[]>([]);
 
   // 导出状态
   const [exportLoading, setExportLoading] = useState(false);
@@ -254,6 +299,23 @@ export default function BidWorkbenchPage() {
   // 批量 AI 生成状态
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchProgress, setBatchProgress] = useState('');
+
+  // 是否已有解析过的招标文件
+  const [hasTenderDoc, setHasTenderDoc] = useState(false);
+
+  // 文档预览状态
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState<{
+    project_title: string;
+    total_sections: number;
+    completed_sections: number;
+    total_words: number;
+    sections: Array<{
+      id: number; title: string; content: string;
+      section_type: string; status: string; word_count: number;
+    }>;
+  } | null>(null);
 
   const contentChanged = useRef(false);
 
@@ -281,6 +343,19 @@ export default function BidWorkbenchPage() {
     }
   }, [projectId]);
 
+  // 加载是否已有解析过的招标文件
+  const loadHasTenderDoc = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const { getTenderDocsByProject } = await import('@/services/tender_doc');
+      const res = await getTenderDocsByProject(projectId);
+      const docs = res.data || [];
+      setHasTenderDoc(docs.some((d: TenderDocumentInfo) => d.parse_status === 'COMPLETED'));
+    } catch {
+      setHasTenderDoc(false);
+    }
+  }, [projectId]);
+
   // 加载用户列表
   useEffect(() => {
     getUserList({ page: 1, page_size: 100 })
@@ -293,7 +368,8 @@ export default function BidWorkbenchPage() {
   useEffect(() => {
     loadProject();
     loadSections();
-  }, [loadProject, loadSections]);
+    loadHasTenderDoc();
+  }, [loadProject, loadSections, loadHasTenderDoc]);
 
   // 选中章节时同步编辑区
   useEffect(() => {
@@ -409,25 +485,97 @@ export default function BidWorkbenchPage() {
     message.success('已追加 AI 生成内容');
   };
 
-  // 废标检查
-  const handleComplianceCheck = async () => {
-    setCheckInputOpen(false);
-    setCheckDrawerOpen(true);
-    setCheckLoading(true);
-    setCheckResult(null);
+  // 标书检测
+  const handleDetect = async () => {
+    setDetectDrawerOpen(true);
+    setDetectLoading(true);
+    setDetectProgress('正在进行规则预检...');
+
+    const ruleItems: DetectItem[] = [];
+    const aiItems: DetectItem[] = [];
+    let ruleScore = 100;
+    let aiScore = 0;
+
+    await runBidDetection(
+      projectId,
+      (item) => { ruleItems.push(item); },
+      (score, count) => {
+        ruleScore = score;
+        setDetectProgress(`规则预检完成（${count}项），开始 AI 检测...`);
+      },
+      (category, current, total) => {
+        setDetectProgress(`AI 检测中：${category}（${current}/${total}）`);
+      },
+      (item) => { aiItems.push(item); },
+      (_category, score) => { aiScore += score; },
+      (reportId, totalScore, status, summary) => {
+        setDetectReport({
+          id: reportId,
+          project_id: projectId,
+          total_score: totalScore,
+          status,
+          rule_score: ruleScore,
+          ai_score: aiScore,
+          rule_items: ruleItems,
+          ai_items: aiItems,
+          summary,
+          created_at: new Date().toISOString(),
+          created_by: null,
+        });
+        setDetectLoading(false);
+        getDetectReports(projectId).then(res => setDetectHistory(res.data || []));
+      },
+      (err) => {
+        message.error(`检测失败: ${err}`);
+        setDetectLoading(false);
+      },
+    );
+  };
+
+  const handleLoadHistoryReport = async (reportId: number) => {
     try {
-      const res = await bidComplianceCheck(projectId, {
-        tender_requirements: checkTenderReq || undefined,
-      });
-      setCheckResult(res.data);
+      const res = await getDetectReportDetail(projectId, reportId);
+      setDetectReport(res.data);
     } catch {
-      message.error('废标检查失败，请重试');
-    } finally {
-      setCheckLoading(false);
+      message.error('加载报告失败');
     }
   };
 
   // 导出 Word
+  // 填充资料库章节
+  const [fillLibraryLoading, setFillLibraryLoading] = useState(false);
+  const handleFillLibrary = async () => {
+    setFillLibraryLoading(true);
+    try {
+      const res = await fillLibrarySections(projectId);
+      const filled = res.data || [];
+      if (filled.length > 0) {
+        message.success(`已填充 ${filled.length} 个资料库章节：${filled.map(s => s.title).join('、')}`);
+        await loadSections();
+      } else {
+        message.info('资料库暂无数据可填充，请先在企业资料库中维护数据');
+      }
+    } catch {
+      message.error('填充失败，请重试');
+    } finally {
+      setFillLibraryLoading(false);
+    }
+  };
+
+  // 文档预览
+  const handlePreview = async () => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    try {
+      const res = await previewBidDocument(projectId);
+      setPreviewData(res.data);
+    } catch {
+      message.error('加载预览失败');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleExportWord = async () => {
     if (!project) return;
     setExportLoading(true);
@@ -583,6 +731,48 @@ export default function BidWorkbenchPage() {
 
   const wordCount = editContent.replace(/\s/g, '').length;
 
+  const renderDetectItems = (items: DetectItem[]) => {
+    if (!items.length) return <Empty description="此类别暂无检查项" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+    return (
+      <List
+        size="small"
+        dataSource={items}
+        renderItem={(item) => {
+          const icon = item.status === 'PASS'
+            ? <CheckCircleFilled style={{ color: '#22c55e', fontSize: 16 }} />
+            : item.status === 'WARNING'
+            ? <WarningFilled style={{ color: '#f59e0b', fontSize: 16 }} />
+            : <CloseCircleFilled style={{ color: '#ef4444', fontSize: 16 }} />;
+          return (
+            <List.Item style={{ alignItems: 'flex-start', padding: '10px 0' }}>
+              <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                <div style={{ marginTop: 2, flexShrink: 0 }}>{icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 2, fontSize: 13 }}>{item.check_name}</div>
+                  {item.source && (
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 2 }}>依据：{item.source}</div>
+                  )}
+                  <div style={{ fontSize: 13, color: '#475569', marginBottom: item.suggestion ? 4 : 0 }}>{item.detail}</div>
+                  {item.suggestion && (
+                    <div style={{
+                      fontSize: 12, color: '#6d28d9', background: '#f5f3ff',
+                      padding: '4px 8px', borderRadius: 4, borderLeft: '3px solid #8b5cf6', marginTop: 4,
+                    }}>
+                      建议：{item.suggestion}
+                    </div>
+                  )}
+                  {item.section_title && (
+                    <Text type="secondary" style={{ fontSize: 11 }}>章节：{item.section_title}</Text>
+                  )}
+                </div>
+              </div>
+            </List.Item>
+          );
+        }}
+      />
+    );
+  };
+
   if (loadingProject) {
     return (
       <div style={{ textAlign: 'center', padding: 100 }}>
@@ -637,11 +827,27 @@ export default function BidWorkbenchPage() {
             {batchLoading ? batchProgress : '批量AI生成'}
           </Button>
           <Button
+            icon={<DatabaseOutlined />}
+            loading={fillLibraryLoading}
+            onClick={handleFillLibrary}
+            style={{ color: '#22c55e', borderColor: '#22c55e' }}
+          >
+            填充资料库
+          </Button>
+          <Button
+            icon={<EyeOutlined />}
+            onClick={handlePreview}
+            style={{ color: '#3b82f6', borderColor: '#3b82f6' }}
+          >
+            文档预览
+          </Button>
+          <Button
             icon={<SafetyCertificateOutlined />}
-            onClick={() => setCheckInputOpen(true)}
+            loading={detectLoading}
+            onClick={handleDetect}
             style={{ color: '#d97706', borderColor: '#d97706' }}
           >
-            废标检查
+            标书检测
           </Button>
           <Button
             icon={<DownloadOutlined />}
@@ -678,8 +884,8 @@ export default function BidWorkbenchPage() {
               招标文件解析
             </Button>
           </div>
-          {/* 一键生成框架按钮（仅在章节数为 0 时显示） */}
-          {sections.length === 0 && (
+          {/* 一键生成框架按钮（仅在没有解析过招标文件、且章节数为 0 时显示） */}
+          {sections.length === 0 && !hasTenderDoc && (
             <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #e2e8f0' }}>
               <Button
                 type="dashed"
@@ -689,7 +895,7 @@ export default function BidWorkbenchPage() {
                 onClick={handleGenerateFramework}
                 style={{ color: '#0d9488', borderColor: '#0d9488' }}
               >
-                一键生成框架
+                一键生成框架（标准模板）
               </Button>
             </div>
           )}
@@ -817,6 +1023,50 @@ export default function BidWorkbenchPage() {
               {/* 内容编辑区 */}
               <div style={{ flex: 1 }}>
                 <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>章节内容</Text>
+                {/* LIBRARY类型：附件预览区 */}
+                {selectedSection.section_type === 'LIBRARY' && editContent && /\[附件:/.test(editContent) && (
+                  <div style={{
+                    marginBottom: 12,
+                    padding: '12px 16px',
+                    background: '#f0fdfa',
+                    border: '1px solid #ccfbf1',
+                    borderRadius: 8,
+                  }}>
+                    <Text strong style={{ fontSize: 12, color: '#0d9488', display: 'block', marginBottom: 8 }}>附件列表</Text>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {(editContent.match(/\[附件:[^\]]+\]/g) || []).map((tag, idx) => {
+                        const m = tag.match(/\[附件:([^:]+):([^\]]+)\]/);
+                        if (!m) return null;
+                        const [, fp, fn] = m;
+                        const url = LIBRARY_API.FILE_URL(fp);
+                        const ext = fp.split('.').pop()?.toLowerCase();
+                        const isImage = ['jpg', 'jpeg', 'png'].includes(ext || '');
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '4px 12px',
+                              background: '#fff',
+                              border: '1px solid #99f6e4',
+                              borderRadius: 6,
+                              color: '#0d9488',
+                              fontSize: 13,
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {isImage ? '🖼' : '📄'} {fn}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <TextArea
                   value={editContent}
                   onChange={(e) => { setEditContent(e.target.value); contentChanged.current = true; }}
@@ -891,31 +1141,14 @@ export default function BidWorkbenchPage() {
         <TenderDocParser
           projectId={project?.id}
           tenderId={project?.tender_id}
-          onParseComplete={(result) => {
-            if (result.bid_document_requirements?.chapters && result.bid_document_requirements.chapters.length > 0) {
-              Modal.confirm({
-                title: '自动生成章节',
-                content: `解析到 ${result.bid_document_requirements.chapters.length} 个章节建议：${result.bid_document_requirements.chapters.slice(0, 5).join('、')}${result.bid_document_requirements.chapters.length > 5 ? ' 等' : ''}。是否自动生成章节？`,
-                okText: '自动生成',
-                cancelText: '暂不',
-                onOk: async () => {
-                  try {
-                    for (let i = 0; i < result.bid_document_requirements!.chapters!.length; i++) {
-                      await createSection({
-                        project_id: projectId,
-                        title: result.bid_document_requirements!.chapters![i],
-                        sort_order: i + 1,
-                      });
-                    }
-                    message.success(`已生成 ${result.bid_document_requirements!.chapters!.length} 个章节`);
-                    await loadSections();
-                    setParseDrawerOpen(false);
-                  } catch {
-                    message.error('章节生成失败');
-                  }
-                },
-              });
-            }
+          onFrameworkGenerated={async () => {
+            const treeRes = await getSectionTree(projectId);
+            setSections(treeRes.data);
+            await loadHasTenderDoc();
+            setParseDrawerOpen(false);
+            // 默认选中第 1 章
+            const flat = flattenSections(treeRes.data);
+            if (flat.length > 0) setSelectedSection(flat[0]);
           }}
         />
       </Drawer>
@@ -1016,142 +1249,215 @@ export default function BidWorkbenchPage() {
         </div>
       </Modal>
 
-      {/* 废标检查 - 输入 Modal */}
-      <Modal
-        title={
-          <Space>
-            <SafetyCertificateOutlined style={{ color: '#d97706' }} />
-            废标检查
-          </Space>
-        }
-        open={checkInputOpen}
-        onOk={handleComplianceCheck}
-        onCancel={() => setCheckInputOpen(false)}
-        okText="开始检查"
-        okButtonProps={{ style: { background: 'linear-gradient(135deg, #d97706, #f59e0b)', border: 'none' } }}
-        width={480}
-        destroyOnHidden
-      >
-        <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>招标要求（可选）</div>
-        <TextArea
-          value={checkTenderReq}
-          onChange={(e) => setCheckTenderReq(e.target.value)}
-          rows={5}
-          placeholder="粘贴招标文件中的关键要求，AI 将逐项核查标书是否满足..."
-        />
-        <div style={{ marginTop: 12, fontSize: 12, color: '#6b7280' }}>
-          不填写则仅做基础格式检查，填写后可按要求逐项核查。
-        </div>
-      </Modal>
-
-      {/* 废标检查结果 Drawer */}
+      {/* 标书检测 Drawer */}
       <Drawer
-        title={
-          <Space>
-            <SafetyCertificateOutlined style={{ color: '#d97706' }} />
-            废标检查报告
-          </Space>
-        }
+        title={<Space><SafetyCertificateOutlined style={{ color: '#d97706' }} />标书检测报告</Space>}
         placement="right"
-        width={640}
-        open={checkDrawerOpen}
-        onClose={() => setCheckDrawerOpen(false)}
+        width={720}
+        open={detectDrawerOpen}
+        onClose={() => setDetectDrawerOpen(false)}
       >
-        {checkLoading ? (
-          <div style={{ textAlign: 'center', padding: 80 }}>
-            <Spin size="large" tip="正在检查中，请稍候..." />
+        {detectLoading ? (
+          <div style={{ textAlign: 'center', padding: 60 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16, color: '#64748b', fontSize: 14 }}>{detectProgress}</div>
           </div>
-        ) : checkResult ? (
+        ) : detectReport ? (
           <div>
-            {/* 顶部总分 */}
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 32,
-              padding: '24px 0',
-              borderBottom: '1px solid #e2e8f0',
-              marginBottom: 24,
-              justifyContent: 'center',
+              display: 'flex', alignItems: 'center', gap: 24,
+              padding: '20px 0', borderBottom: '1px solid #e2e8f0', marginBottom: 16,
             }}>
               <Progress
                 type="circle"
-                percent={checkResult.score}
-                size={100}
-                strokeColor={checkResult.score >= 80 ? '#22c55e' : checkResult.score >= 60 ? '#f59e0b' : '#ef4444'}
-                format={(pct) => <span style={{ fontSize: 22, fontWeight: 700 }}>{pct}</span>}
+                percent={detectReport.total_score}
+                size={90}
+                strokeColor={detectReport.total_score >= 80 ? '#22c55e' : detectReport.total_score >= 60 ? '#f59e0b' : '#ef4444'}
+                format={(pct) => <span style={{ fontSize: 20, fontWeight: 700 }}>{pct}</span>}
               />
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#0f172a' }}>综合评分</div>
-                <Tag
-                  color={checkResult.pass ? 'success' : 'error'}
-                  style={{ fontSize: 14, padding: '4px 12px' }}
-                >
-                  {checkResult.pass ? '通过' : '未通过'}
-                </Tag>
-                {checkResult.missing_sections && checkResult.missing_sections.length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#ef4444' }}>
-                    缺失章节：{checkResult.missing_sections.join('、')}
-                  </div>
-                )}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+                  <Tag color={detectReport.status === 'PASS' ? 'success' : detectReport.status === 'WARNING' ? 'warning' : 'error'} style={{ fontSize: 14, padding: '2px 12px' }}>
+                    {detectReport.status === 'PASS' ? '通过' : detectReport.status === 'WARNING' ? '需关注' : '不合规'}
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>规则 {detectReport.rule_score}分 | AI {detectReport.ai_score}分</Text>
+                </div>
+                <div style={{ fontSize: 13, color: '#475569' }}>{detectReport.summary}</div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12 }}>
+                  <span style={{ color: '#22c55e' }}>通过 {[...detectReport.rule_items, ...detectReport.ai_items].filter(i => i.status === 'PASS').length}</span>
+                  <span style={{ color: '#f59e0b' }}>警告 {[...detectReport.rule_items, ...detectReport.ai_items].filter(i => i.status === 'WARNING').length}</span>
+                  <span style={{ color: '#ef4444' }}>失败 {[...detectReport.rule_items, ...detectReport.ai_items].filter(i => i.status === 'FAIL').length}</span>
+                </div>
               </div>
             </div>
-
-            {/* 检查项列表 */}
-            <List
-              dataSource={checkResult.items}
-              renderItem={(item) => {
-                const statusIcon =
-                  item.status === 'PASS' ? <CheckCircleFilled style={{ color: '#22c55e', fontSize: 16 }} /> :
-                  item.status === 'WARN' ? <WarningFilled style={{ color: '#f59e0b', fontSize: 16 }} /> :
-                  <CloseCircleFilled style={{ color: '#ef4444', fontSize: 16 }} />;
-                return (
-                  <List.Item style={{ alignItems: 'flex-start', padding: '12px 0' }}>
-                    <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                      <div style={{ marginTop: 2, flexShrink: 0 }}>{statusIcon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>{item.requirement}</div>
-                        <div style={{ fontSize: 13, color: '#475569', marginBottom: item.suggestion ? 6 : 0 }}>{item.detail}</div>
-                        {item.suggestion && (
-                          <div style={{
-                            fontSize: 12,
-                            color: '#6d28d9',
-                            background: '#f5f3ff',
-                            padding: '6px 10px',
-                            borderRadius: 4,
-                            borderLeft: '3px solid #8b5cf6',
-                          }}>
-                            建议：{item.suggestion}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </List.Item>
-                );
-              }}
+            <Tabs
+              size="small"
+              items={[
+                {
+                  key: 'all', label: '全部',
+                  children: renderDetectItems([...detectReport.rule_items, ...detectReport.ai_items]
+                    .sort((a, b) => {
+                      const order: Record<string, number> = { FAIL: 0, WARNING: 1, PASS: 2 };
+                      return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+                    })),
+                },
+                { key: 'rule', label: '规则预检', children: renderDetectItems(detectReport.rule_items) },
+                { key: 'qual', label: '资格条件', children: renderDetectItems(detectReport.ai_items.filter(i => i.category === '资格条件')) },
+                { key: 'score', label: '评分覆盖', children: renderDetectItems(detectReport.ai_items.filter(i => i.category === '评分覆盖')) },
+                { key: 'tech', label: '技术响应', children: renderDetectItems(detectReport.ai_items.filter(i => i.category === '技术响应')) },
+                { key: 'biz', label: '商务风险', children: renderDetectItems(detectReport.ai_items.filter(i => i.category === '商务风险')) },
+                { key: 'fmt', label: '格式合规', children: renderDetectItems(detectReport.ai_items.filter(i => i.category === '格式合规')) },
+              ]}
             />
-
-            {/* 风险警告 */}
-            {checkResult.risk_warnings && checkResult.risk_warnings.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>风险警告</div>
-                {checkResult.risk_warnings.map((w, i) => (
-                  <div key={i} style={{
-                    padding: '8px 12px',
-                    background: '#fef2f2',
-                    borderRadius: 4,
-                    borderLeft: '3px solid #ef4444',
-                    marginBottom: 6,
-                    fontSize: 13,
-                    color: '#7f1d1d',
-                  }}>
-                    {w}
-                  </div>
-                ))}
+            {detectHistory.length > 1 && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+                <Text strong style={{ fontSize: 13, color: '#475569' }}>历史检测</Text>
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {detectHistory.map(h => (
+                    <div
+                      key={h.id}
+                      onClick={() => handleLoadHistoryReport(h.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
+                        background: h.id === detectReport.id ? '#f0fdfa' : '#f8fafc',
+                        border: h.id === detectReport.id ? '1px solid #99f6e4' : '1px solid #e2e8f0',
+                      }}
+                    >
+                      <Tag color={h.status === 'PASS' ? 'success' : h.status === 'WARNING' ? 'warning' : 'error'} style={{ fontSize: 11 }}>
+                        {h.total_score}分
+                      </Tag>
+                      <Text style={{ fontSize: 12, flex: 1 }} ellipsis>{h.summary}</Text>
+                      <Text type="secondary" style={{ fontSize: 11 }}>{h.created_at?.slice(0, 16).replace('T', ' ')}</Text>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         ) : (
-          <Empty description="暂无检查结果" />
+          <Empty description="暂无检测结果" />
+        )}
+      </Drawer>
+
+      {/* 文档预览 Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <EyeOutlined style={{ color: '#3b82f6' }} />
+            文档预览
+          </Space>
+        }
+        placement="right"
+        width={800}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        extra={
+          previewData ? (
+            <Space size="middle">
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {previewData.completed_sections}/{previewData.total_sections} 章节已完成
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                共 {previewData.total_words.toLocaleString()} 字
+              </Text>
+            </Space>
+          ) : null
+        }
+      >
+        {previewLoading ? (
+          <div style={{ textAlign: 'center', padding: 80 }}>
+            <Spin size="large" tip="加载中..." />
+          </div>
+        ) : previewData ? (
+          <div style={{ fontFamily: 'SimSun, serif' }}>
+            {/* 标题 */}
+            <h1 style={{
+              textAlign: 'center',
+              fontSize: 22,
+              fontWeight: 700,
+              color: '#0f172a',
+              marginBottom: 32,
+              paddingBottom: 16,
+              borderBottom: '2px solid #0d9488',
+            }}>
+              {previewData.project_title}
+            </h1>
+
+            {/* 章节内容 */}
+            {previewData.sections.map((section, index) => (
+              <div key={section.id} style={{ marginBottom: 28 }}>
+                {/* 章节标题 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12,
+                  cursor: 'pointer',
+                }}
+                  onClick={() => {
+                    // 点击跳转到对应章节编辑
+                    const target = sections.find(s => s.id === section.id);
+                    if (target) {
+                      setSelectedSection(target);
+                      setPreviewOpen(false);
+                    }
+                  }}
+                >
+                  <h2 style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    margin: 0,
+                  }}>
+                    {index + 1}. {section.title}
+                  </h2>
+                  <Tag
+                    color={SECTION_TYPE_CONFIG[section.section_type]?.color}
+                    style={{ fontSize: 11 }}
+                  >
+                    {SECTION_TYPE_CONFIG[section.section_type]?.label}
+                  </Tag>
+                  {section.status !== 'COMPLETED' && (
+                    <Tag color={section.status === 'WRITING' ? 'processing' : 'default'} style={{ fontSize: 11 }}>
+                      {section.status === 'PENDING' ? '待处理' : '编写中'}
+                    </Tag>
+                  )}
+                </div>
+
+                {/* 章节内容 */}
+                {section.content ? (
+                  <div style={{
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.8,
+                    fontSize: 14,
+                    color: '#1e293b',
+                    paddingLeft: 16,
+                    borderLeft: '3px solid #e2e8f0',
+                  }}>
+                    {/\[附件:/.test(section.content)
+                      ? renderContentWithAttachments(section.content)
+                      : section.content}
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '12px 16px',
+                    background: '#fef3c7',
+                    borderRadius: 6,
+                    color: '#92400e',
+                    fontSize: 13,
+                  }}>
+                    此章节暂无内容
+                    {section.section_type === 'AI_GENERATE' && ' — 可使用 AI 生成'}
+                    {section.section_type === 'MANUAL' && ' — 需手动填写'}
+                    {section.section_type === 'LIBRARY' && ' — 需从企业资料库导入'}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty description="暂无数据" />
         )}
       </Drawer>
     </div>
