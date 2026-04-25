@@ -349,7 +349,13 @@ interface TenderParseResult {
     format?: string;
     copies?: string;
     seal_requirements?: string;
-    chapters?: string[];
+    /** 章节列表：新版为结构化对象（含模板原文），旧版为字符串数组（仅章节名） */
+    chapters?: Array<string | {
+      title: string;
+      section_type?: 'TEMPLATE' | 'MANUAL' | 'AI_GENERATE' | 'LIBRARY';
+      template?: string;
+      matched?: boolean;
+    }>;
   };
   risk_alerts?: string[];
 }

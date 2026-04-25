@@ -26,11 +26,7 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete, 
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [genProgress, setGenProgress] = useState<{
-    phase: 'extract' | 'create' | 'done';
-    message: string;
-    sectionsCreated: number;
-  } | null>(null);
+  const [genCreatedCount, setGenCreatedCount] = useState(0);
   const [progressText, setProgressText] = useState('');
   const [progressColor, setProgressColor] = useState('#0d9488');
   const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number } | null>(null);
@@ -544,7 +540,10 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete, 
                 <Text strong style={{ fontSize: 13 }}>解析到 {result.bid_document_requirements.chapters.length} 个章节建议</Text>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {result.bid_document_requirements.chapters.slice(0, 3).join('、')}
+                    {result.bid_document_requirements.chapters
+                      .slice(0, 3)
+                      .map((c) => typeof c === 'string' ? c : c.title)
+                      .join('、')}
                     {result.bid_document_requirements.chapters.length > 3 && ` 等`}
                   </Text>
                 </div>
@@ -562,67 +561,29 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete, 
                     return;
                   }
                   setGenerating(true);
-                  setGenProgress({ phase: 'extract', message: '准备 AI 抽取章节模板...', sectionsCreated: 0 });
-                  let extractFailed = false;
+                  setGenCreatedCount(0);
 
                   await generateFrameworkFromTender(
                     projectId,
                     docInfo.id,
-                    (count) => {
-                      setGenProgress({ phase: 'extract', message: `AI 抽取 ${count} 个章节模板中（约 30~60 秒）...`, sectionsCreated: 0 });
-                    },
-                    (matched, ms) => {
-                      setGenProgress({ phase: 'create', message: `AI 抽取完成（命中 ${matched} 个，耗时 ${Math.round(ms / 1000)}s），正在创建章节...`, sectionsCreated: 0 });
-                    },
-                    (msg, ms) => {
-                      extractFailed = true;
-                      setGenProgress({ phase: 'create', message: `AI 抽取失败（${msg}，耗时 ${Math.round(ms / 1000)}s），降级创建空章节...`, sectionsCreated: 0 });
-                    },
-                    (_title, _type, _hasContent) => {
-                      setGenProgress((prev) => prev ? { ...prev, sectionsCreated: prev.sectionsCreated + 1 } : prev);
+                    () => {
+                      setGenCreatedCount((prev) => prev + 1);
                     },
                     (total, withContent) => {
-                      setGenProgress({ phase: 'done', message: `已生成 ${total} 个章节（含模板 ${withContent} 个）`, sectionsCreated: total });
                       setGenerating(false);
-                      if (extractFailed) {
-                        message.warning(`已创建 ${total} 个空章节框架，AI 模板抽取失败请手动填写`);
-                      } else {
-                        message.success(`已生成 ${total} 个章节，其中 ${withContent} 个含招标文件模板原文`);
-                      }
+                      message.success(`已生成 ${total} 个章节，其中 ${withContent} 个含招标文件模板原文`);
                       if (onFrameworkGenerated) onFrameworkGenerated(total, withContent);
                     },
                     (errMsg) => {
                       setGenerating(false);
-                      setGenProgress(null);
+                      setGenCreatedCount(0);
                       message.error(`生成失败: ${errMsg}`);
                     },
                   );
                 }}
               >
-                {generating ? '生成中...' : '一键填入招标信息'}
+                {generating ? `生成中 (${genCreatedCount})...` : '一键填入招标信息'}
               </Button>
-            </div>
-          )}
-
-          {genProgress && (
-            <div style={{
-              marginTop: 8,
-              padding: '10px 14px',
-              background: genProgress.phase === 'done' ? '#f0fdfa' : '#fef3c7',
-              borderRadius: 6,
-              border: `1px solid ${genProgress.phase === 'done' ? '#99f6e4' : '#fde68a'}`,
-              fontSize: 12,
-              color: '#475569',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {generating && <Spin size="small" />}
-                <span>{genProgress.message}</span>
-              </div>
-              {genProgress.phase === 'create' && genProgress.sectionsCreated > 0 && (
-                <div style={{ marginTop: 4, color: '#0d9488' }}>
-                  已创建 {genProgress.sectionsCreated} 个章节
-                </div>
-              )}
             </div>
           )}
 

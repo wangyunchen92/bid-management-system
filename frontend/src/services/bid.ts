@@ -115,9 +115,6 @@ export function generateBidFramework(projectId: number) {
 export async function generateFrameworkFromTender(
   projectId: number,
   tenderDocId: number,
-  onExtractStart: (chapterCount: number) => void,
-  onExtractDone: (matchedCount: number, durationMs: number) => void,
-  onExtractFailed: (message: string, durationMs: number) => void,
   onSectionCreated: (title: string, sectionType: string, hasContent: boolean) => void,
   onDone: (total: number, withContent: number) => void,
   onError: (message: string) => void,
@@ -156,9 +153,6 @@ export async function generateFrameworkFromTender(
       try {
         const data = JSON.parse(line.slice(6));
         switch (data.type) {
-          case 'extract_start': onExtractStart(data.chapter_count); break;
-          case 'extract_done': onExtractDone(data.matched_count, data.duration_ms); break;
-          case 'extract_failed': onExtractFailed(data.message, data.duration_ms); break;
           case 'section_created': onSectionCreated(data.title, data.section_type, data.has_content); break;
           case 'done': onDone(data.total, data.with_content); break;
           case 'error': onError(data.message); break;
