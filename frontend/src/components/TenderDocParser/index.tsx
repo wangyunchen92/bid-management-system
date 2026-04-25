@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Upload, Spin, Tabs, Descriptions, Timeline, List, Table, Alert,
-  Button, Typography, Tag, Space, App } from 'antd';
+  Button, Typography, Tag, Space, App, Progress } from 'antd';
 import type { UploadProps } from 'antd';
 import {
   InboxOutlined, FileTextOutlined, ClockCircleOutlined,
-  SafetyCertificateOutlined, BarChartOutlined, WarningOutlined,
+  SafetyCertificateOutlined, BarChartOutlined, WarningOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
-import { uploadTenderDoc, saveToTender } from '@/services/tender_doc';
+import { uploadTenderDocStream, saveToTender, getTenderDocsByProject, getTenderDocsByTender } from '@/services/tender_doc';
+import { generateFrameworkFromTender } from '@/services/bid';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -15,33 +16,114 @@ const { Text, Title } = Typography;
 interface TenderDocParserProps {
   projectId?: number;
   tenderId?: number;
+  /** 章节框架生成完成后回调（生成的章节数和带模板的数量） */
+  onFrameworkGenerated?: (totalSections: number, withContent: number) => void;
+  /** 兼容：解析完成后回调 */
   onParseComplete?: (result: TenderParseResult) => void;
 }
 
-const PARSE_STATUS_STEPS: Record<string, { text: string; color: string }> = {
-  PENDING:    { text: '等待处理', color: '#94a3b8' },
-  EXTRACTING: { text: '提取文本中...', color: '#3b82f6' },
-  PARSING:    { text: 'AI 解析中...', color: '#8b5cf6' },
-  COMPLETED:  { text: '解析完成', color: '#22c55e' },
-  FAILED:     { text: '解析失败', color: '#ef4444' },
-};
-
-export default function TenderDocParser({ projectId, tenderId, onParseComplete }: TenderDocParserProps) {
+export default function TenderDocParser({ projectId, tenderId, onParseComplete, onFrameworkGenerated }: TenderDocParserProps) {
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
-  const [parseStatus, setParseStatus] = useState<TenderDocumentInfo['parse_status'] | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState<{
+    phase: 'extract' | 'create' | 'done';
+    message: string;
+    sectionsCreated: number;
+  } | null>(null);
+  const [progressText, setProgressText] = useState('');
+  const [progressColor, setProgressColor] = useState('#0d9488');
+  const [ocrProgress, setOcrProgress] = useState<{ current: number; total: number } | null>(null);
   const [docInfo, setDocInfo] = useState<TenderDocumentInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [parseStatus, setParseStatus] = useState<TenderDocumentInfo['parse_status'] | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(true);
+
+  // 挂载时加载已存在的解析结果（按项目或招标 ID）
+  useEffect(() => {
+    let cancelled = false;
+    const loadExisting = async () => {
+      setLoadingExisting(true);
+      try {
+        let docs: TenderDocumentInfo[] = [];
+        if (projectId) {
+          const res = await getTenderDocsByProject(projectId);
+          docs = res.data || [];
+        } else if (tenderId) {
+          const res = await getTenderDocsByTender(tenderId);
+          docs = res.data || [];
+        }
+        if (cancelled) return;
+        // 取最新一份已解析完成的文档
+        const latest = docs.find(d => d.parse_status === 'COMPLETED' && d.parse_result);
+        if (latest) {
+          setDocInfo(latest);
+          setParseStatus(latest.parse_status);
+        }
+      } catch {
+        // 静默失败，让用户重新上传
+      } finally {
+        if (!cancelled) setLoadingExisting(false);
+      }
+    };
+    loadExisting();
+    return () => { cancelled = true; };
+  }, [projectId, tenderId]);
 
   const handleUpload = async (file: File) => {
     setUploading(true);
-    setParseStatus('PENDING');
+    setProgressText('准备上传...');
+    setProgressColor('#0d9488');
+    setOcrProgress(null);
     setErrorMsg(null);
     setDocInfo(null);
     try {
-      setParseStatus('EXTRACTING');
-      const res = await uploadTenderDoc(file, projectId, tenderId);
-      const info = res.data;
+      const info = await uploadTenderDocStream(file, projectId, tenderId, (event) => {
+        switch (event.type) {
+          case 'uploading':
+            setProgressText('上传中...');
+            setProgressColor('#0d9488');
+            break;
+          case 'extracting':
+            setProgressText('提取文本...');
+            setProgressColor('#3b82f6');
+            break;
+          case 'ocr_start':
+            setProgressText(event.message || `开始 OCR（${event.pages_to_process} 页）`);
+            setProgressColor('#f59e0b');
+            setOcrProgress({ current: 0, total: event.pages_to_process || 0 });
+            break;
+          case 'ocr_page':
+            setProgressText(`OCR 识别中 ${event.current}/${event.total}`);
+            setOcrProgress({ current: event.current || 0, total: event.total || 0 });
+            break;
+          case 'ocr_page_failed':
+            setProgressText(`第 ${event.page} 页 OCR 失败，继续...`);
+            break;
+          case 'ocr_done':
+            setProgressText('OCR 完成');
+            setOcrProgress(null);
+            break;
+          case 'parsing':
+            setProgressText('AI 智能解析中...');
+            setProgressColor('#8b5cf6');
+            break;
+          case 'linking':
+            setProgressText('自动保存到招标信息...');
+            setProgressColor('#0d9488');
+            break;
+          case 'linked':
+            setProgressText(event.message || '已关联招标信息');
+            break;
+          case 'link_failed':
+            setProgressText('解析完成（未自动关联招标信息）');
+            break;
+          case 'done':
+            setProgressText('解析完成');
+            setProgressColor('#22c55e');
+            break;
+        }
+      });
       setDocInfo(info);
       setParseStatus(info.parse_status);
       if (info.parse_status === 'COMPLETED' && info.parse_result && onParseComplete) {
@@ -56,7 +138,7 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete }
     } finally {
       setUploading(false);
     }
-    return false; // prevent default upload
+    return false;
   };
 
   const draggerProps: UploadProps = {
@@ -83,8 +165,16 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete }
 
   return (
     <div style={{ padding: '8px 0' }}>
+      {/* 加载已存在的解析结果 */}
+      {loadingExisting && !docInfo && !uploading && (
+        <div style={{ textAlign: 'center', padding: '32px 0' }}>
+          <Spin />
+          <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>加载历史解析结果...</div>
+        </div>
+      )}
+
       {/* Upload Area */}
-      {!docInfo && (
+      {!docInfo && !loadingExisting && (
         <Dragger {...draggerProps} style={{ marginBottom: 8 }}>
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ color: '#0d9488', fontSize: 32 }} />
@@ -99,17 +189,29 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete }
       )}
 
       {/* Upload/Parsing Progress */}
-      {uploading && parseStatus && (
-        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      {uploading && (
+        <div style={{ textAlign: 'center', padding: '24px 16px' }}>
           <Spin size="large" />
-          <div style={{ marginTop: 12 }}>
-            <Tag color={PARSE_STATUS_STEPS[parseStatus]?.color || '#94a3b8'}>
-              {PARSE_STATUS_STEPS[parseStatus]?.text || parseStatus}
-            </Tag>
+          <div style={{ marginTop: 16, fontSize: 14, fontWeight: 500, color: progressColor }}>
+            {progressText}
           </div>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
-            AI 解析招标文件通常需要 30~60 秒，请耐心等待...
-          </Text>
+          {ocrProgress && ocrProgress.total > 0 && (
+            <div style={{ marginTop: 16, padding: '0 8px' }}>
+              <Progress
+                percent={Math.round((ocrProgress.current / ocrProgress.total) * 100)}
+                strokeColor={progressColor}
+                format={() => `${ocrProgress.current} / ${ocrProgress.total}`}
+              />
+              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                每页 OCR 约 30 秒，扫描件总耗时较长，请耐心等待
+              </Text>
+            </div>
+          )}
+          {!ocrProgress && (
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+              文本型文件 30~60 秒，扫描件需要逐页 OCR 会更慢
+            </Text>
+          )}
         </div>
       )}
 
@@ -450,15 +552,77 @@ export default function TenderDocParser({ projectId, tenderId, onParseComplete }
               <Button
                 type="primary"
                 size="small"
+                loading={generating}
+                disabled={!projectId || !docInfo?.id}
                 style={{ background: 'linear-gradient(135deg, #0d9488, #14b8a6)', border: 'none', flexShrink: 0 }}
-                onClick={() => {
-                  if (onParseComplete) {
-                    onParseComplete(result);
+                icon={<ThunderboltOutlined />}
+                onClick={async () => {
+                  if (!projectId || !docInfo?.id) {
+                    message.warning('缺少项目或招标文件信息');
+                    return;
                   }
+                  setGenerating(true);
+                  setGenProgress({ phase: 'extract', message: '准备 AI 抽取章节模板...', sectionsCreated: 0 });
+                  let extractFailed = false;
+
+                  await generateFrameworkFromTender(
+                    projectId,
+                    docInfo.id,
+                    (count) => {
+                      setGenProgress({ phase: 'extract', message: `AI 抽取 ${count} 个章节模板中（约 30~60 秒）...`, sectionsCreated: 0 });
+                    },
+                    (matched, ms) => {
+                      setGenProgress({ phase: 'create', message: `AI 抽取完成（命中 ${matched} 个，耗时 ${Math.round(ms / 1000)}s），正在创建章节...`, sectionsCreated: 0 });
+                    },
+                    (msg, ms) => {
+                      extractFailed = true;
+                      setGenProgress({ phase: 'create', message: `AI 抽取失败（${msg}，耗时 ${Math.round(ms / 1000)}s），降级创建空章节...`, sectionsCreated: 0 });
+                    },
+                    (_title, _type, _hasContent) => {
+                      setGenProgress((prev) => prev ? { ...prev, sectionsCreated: prev.sectionsCreated + 1 } : prev);
+                    },
+                    (total, withContent) => {
+                      setGenProgress({ phase: 'done', message: `已生成 ${total} 个章节（含模板 ${withContent} 个）`, sectionsCreated: total });
+                      setGenerating(false);
+                      if (extractFailed) {
+                        message.warning(`已创建 ${total} 个空章节框架，AI 模板抽取失败请手动填写`);
+                      } else {
+                        message.success(`已生成 ${total} 个章节，其中 ${withContent} 个含招标文件模板原文`);
+                      }
+                      if (onFrameworkGenerated) onFrameworkGenerated(total, withContent);
+                    },
+                    (errMsg) => {
+                      setGenerating(false);
+                      setGenProgress(null);
+                      message.error(`生成失败: ${errMsg}`);
+                    },
+                  );
                 }}
               >
-                一键填入招标信息
+                {generating ? '生成中...' : '一键填入招标信息'}
               </Button>
+            </div>
+          )}
+
+          {genProgress && (
+            <div style={{
+              marginTop: 8,
+              padding: '10px 14px',
+              background: genProgress.phase === 'done' ? '#f0fdfa' : '#fef3c7',
+              borderRadius: 6,
+              border: `1px solid ${genProgress.phase === 'done' ? '#99f6e4' : '#fde68a'}`,
+              fontSize: 12,
+              color: '#475569',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {generating && <Spin size="small" />}
+                <span>{genProgress.message}</span>
+              </div>
+              {genProgress.phase === 'create' && genProgress.sectionsCreated > 0 && (
+                <div style={{ marginTop: 4, color: '#0d9488' }}>
+                  已创建 {genProgress.sectionsCreated} 个章节
+                </div>
+              )}
             </div>
           )}
 
