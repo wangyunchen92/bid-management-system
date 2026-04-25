@@ -130,3 +130,7 @@ class BidCheckResponse(BaseModel):
     risk_warnings: List[str] = []
 
     model_config = {"populate_by_name": True}
+
+
+class FrameworkFromTenderRequest(BaseModel):
+    tender_doc_id: int
