@@ -80,7 +80,7 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
       Link.configure({ openOnClick: false, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
       Placeholder.configure({ placeholder: placeholder || '在此输入章节内容...' }),
       Markdown.configure({
-        html: false,           // 不接受 raw HTML（更可控）
+        html: true,            // 允许 <br> 等内联 HTML（用于表格 cell 内换行）
         tightLists: true,      // 列表紧凑
         bulletListMarker: '-', // 用 - 作为无序列表标记
         linkify: false,

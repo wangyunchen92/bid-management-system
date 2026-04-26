@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { LIBRARY_API } from '@/constants/api';
 
 interface Props {
@@ -84,6 +85,7 @@ function MdBlock({ text }: { text: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         table: ({ node, ...props }) => (
           <div style={{ overflowX: 'auto', margin: '12px 0' }}>
