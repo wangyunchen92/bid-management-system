@@ -716,6 +716,17 @@ class BidFrameworkService:
                 flags=re.MULTILINE,
             )
 
+        # 8-pre2. 去掉相邻表格行之间的空行（markdown 把空行当表格结束，导致后续行不被识别）
+        prev_loop = None
+        while prev_loop != content:
+            prev_loop = content
+            content = re.sub(
+                r'(^\|[^\n]*\|)\n\s*\n(?=\|[^\n]*\|)',
+                r'\g<1>\n',
+                content,
+                flags=re.MULTILINE,
+            )
+
         lines = content.split('\n')
 
         # 8a. 表格行规整：补齐缺失的尾部 |、按分隔符行的列数对齐
