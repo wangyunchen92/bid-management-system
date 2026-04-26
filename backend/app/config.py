@@ -46,8 +46,19 @@ class Settings(BaseSettings):
     # AI 配置（火山引擎/豆包）
     AI_API_KEY: str = "46813e98-c5d7-4979-9875-81d6aa3b4243"
     AI_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
-    AI_MODEL: str = "doubao-seed-1-6-251015"
-    AI_VISION_MODEL: str = ""  # 视觉模型（如 doubao-1-5-vision-pro-250328），为空则不启用扫描件识别
+    AI_MODEL: str = "doubao-seed-1-8-251228"
+    AI_VISION_MODEL: str = "doubao-seed-1-8-251228"  # 视觉模型，用于扫描件/图片识别
+
+    # 企业信息配置
+    COMPANY_NAME: str = "合肥新安彩印包装有限公司"
+    COMPANY_ADDRESS: str = "合肥市长江西路蜀鑫大道12号"
+    COMPANY_PHONE: str = "0551-65329905"
+    COMPANY_FAX: str = "0551-65316566"
+    COMPANY_ZIPCODE: str = "230031"
+    COMPANY_LEGAL_PERSON: str = "吴晓东"
+    COMPANY_CREDIT_CODE: str = "913401007349718851M"
+    COMPANY_BANK: str = "工行开发区支行"
+    COMPANY_BANK_ACCOUNT: str = "1302011909024926532"
 
     @property
     def DATABASE_URL(self) -> str:
