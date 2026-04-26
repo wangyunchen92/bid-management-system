@@ -75,30 +75,86 @@ class LibraryAIService:
             self.client = OpenAI(api_key=settings.AI_API_KEY, base_url=settings.AI_BASE_URL)
         return self.client
 
+    def _compress_image(self, image_bytes: bytes, max_width: int = 1500, quality: int = 85) -> tuple:
+        """压缩图片以减少 token 消耗和识别耗时
+
+        - 超宽图按比例缩放到 max_width
+        - 统一转 JPEG（比 PNG 体积小）
+        - 返回 (压缩后字节, 'jpeg')
+        """
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(image_bytes))
+        # RGBA/P 模式转 RGB（JPEG 不支持透明）
+        if img.mode in ('RGBA', 'P', 'LA'):
+            bg = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            bg.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = bg
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # 按比例缩放
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_size = (max_width, int(img.height * ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=quality, optimize=True)
+        return buf.getvalue(), 'jpeg'
+
     def _try_vision_recognize(self, file_path: str, module: str) -> Optional[dict]:
-        """对扫描件/图片 PDF 用视觉模型识别"""
+        """对扫描件/图片/图片 PDF 用视觉模型识别
+
+        支持三种情况：
+        1. 直接上传的 jpg/png/jpeg 图片
+        2. PDF 中有内嵌图片（常见的扫描 PDF）
+        3. PDF 是矢量渲染但无文本层（罕见），将首页渲染为图片
+
+        所有图片统一压缩到 1500px 宽以降低 token 消耗和耗时。
+        """
         import base64
-        import fitz
+        import os
+
+        vision_model = getattr(settings, "AI_VISION_MODEL", None)
+        if not vision_model:
+            return None
+
+        ext = os.path.splitext(file_path)[1].lower().lstrip('.')
 
         try:
-            doc = fitz.open(file_path)
-            page = doc[0]
-            images = page.get_images()
-            if not images:
+            # 构造图片数据
+            if ext in ('jpg', 'jpeg', 'png'):
+                with open(file_path, 'rb') as f:
+                    image_bytes = f.read()
+            elif ext == 'pdf':
+                import fitz
+                doc = fitz.open(file_path)
+                page = doc[0]
+                # 优先取内嵌大图
+                images = page.get_images()
+                image_bytes = None
+                if images:
+                    xref = images[0][0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                if not image_bytes:
+                    # 渲染首页为图片（150 DPI）
+                    pix = page.get_pixmap(dpi=150)
+                    image_bytes = pix.tobytes("png")
                 doc.close()
+            else:
                 return None
 
-            xref = images[0][0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
+            # 压缩图片（大图缩放到 1500px 宽，JPEG 质量 85%）
+            original_size = len(image_bytes)
+            image_bytes, img_ext = self._compress_image(image_bytes)
+            logger.info(f"图片压缩: {original_size/1024:.0f}KB → {len(image_bytes)/1024:.0f}KB")
+
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-            ext = base_image["ext"]
-            doc.close()
-
-            # 尝试用视觉模型
-            vision_model = getattr(settings, "AI_VISION_MODEL", None)
-            if not vision_model:
-                return None
 
             module_info = MODULE_PROMPTS[module]
             client = self._get_client()
@@ -108,7 +164,7 @@ class LibraryAIService:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": f"请识别这张{module_info['description']}图片中的信息。\n\n{module_info['fields']}"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{image_b64}"}},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{img_ext};base64,{image_b64}"}},
                     ],
                 }],
                 max_tokens=2048,
@@ -118,7 +174,7 @@ class LibraryAIService:
             if result_text.startswith("```"):
                 result_text = result_text.split("\n", 1)[1] if "\n" in result_text else result_text
                 if result_text.endswith("```"):
-                    result_text = result_text[:-3]
+                    result_text = result_text[:-3].strip()
             return json.loads(result_text)
         except Exception as e:
             logger.warning(f"视觉模型识别失败: {e}")
@@ -137,9 +193,12 @@ class LibraryAIService:
         except Exception as e:
             logger.error(f"文本提取失败: {e}")
 
-        if not text or len(text.strip()) < 10:
-            # 扫描件/图片 PDF — 尝试视觉模型
-            logger.info("文本提取为空，尝试视觉模型识别...")
+        # 过滤页分隔符和空行后判断有效文本长度
+        import re
+        effective_text = re.sub(r'---\s*第\s*\d+\s*页\s*---|\s+', '', text)
+        if len(effective_text) < 20:
+            # 扫描件/图片 PDF / 直接图片 — 尝试视觉模型
+            logger.info(f"有效文本太少({len(effective_text)}字)，尝试视觉模型识别...")
             vision_result = self._try_vision_recognize(file_path, module)
             if vision_result:
                 return vision_result

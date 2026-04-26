@@ -106,7 +106,11 @@ export default function QualificationPage() {
     { title: '证书名称', dataIndex: 'cert_name', key: 'cert_name', ellipsis: true },
     {
       title: '证书类型', dataIndex: 'cert_type', key: 'cert_type', width: 120,
-      render: (v?: string) => v ? <Tag color="blue">{v}</Tag> : '-',
+      render: (v?: string) => {
+        if (!v) return '-';
+        const label = CERT_TYPES.find(t => t.value === v)?.label ?? v;
+        return <Tag color="blue">{label}</Tag>;
+      },
     },
     {
       title: '证书编号', dataIndex: 'cert_no', key: 'cert_no', width: 160,
