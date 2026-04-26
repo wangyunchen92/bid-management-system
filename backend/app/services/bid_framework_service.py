@@ -682,14 +682,15 @@ class BidFrameworkService:
             id_cert = await _lookup_personnel(["身份证明", "身份证"])
         id_marker = _to_marker(id_cert, f"{settings.COMPANY_LEGAL_PERSON}身份证扫描件")
         # 表格 cell 用 lookahead 兼容连续相邻 cell（| 身份证扫描件 | 身份证扫描件 |）
-        content = re.sub(r'(\|\s*)身份证扫描件(\s*)(?=\|)', rf'\1{id_marker}\2', content)
+        # 注：用 \g<1> 而非 \1 避免插入数字开头的字符串时被解析为 \1+数字 backref
+        content = re.sub(r'(\|\s*)身份证扫描件(\s*)(?=\|)', rf'\g<1>{id_marker}\g<2>', content)
         # 独立行
         content = re.sub(r'^身份证扫描件\s*$', id_marker, content, flags=re.MULTILINE)
 
         # 营业执照（含「营业执照扫描件」「营业执照副本」等）
         biz = await _lookup_qualification(["营业执照", "营业执照副本"])
         biz_marker = _to_marker(biz, "营业执照扫描件")
-        content = re.sub(r'(\|\s*)营业执照(扫描件|副本)?(\s*)(?=\|)', rf'\1{biz_marker}\3', content)
+        content = re.sub(r'(\|\s*)营业执照(扫描件|副本)?(\s*)(?=\|)', rf'\g<1>{biz_marker}\g<3>', content)
 
         return content
 
@@ -749,9 +750,10 @@ class BidFrameworkService:
         from datetime import datetime
         today_str = datetime.now().strftime("%Y年%m月%d日")
         # 日期类（日期/日 期/落款日期/签章日期/出具日期 等）
+        # 用 \g<1> 而非 \1 避免 today_str 数字与 \1 拼成 \12026 被解析为 group ref
         content = re.sub(
             r'(日[ 　]*期[：:])[ 　]{3,}(?=$|\n)',
-            rf'\1{today_str}',
+            rf'\g<1>{today_str}',
             content,
             flags=re.MULTILINE,
         )

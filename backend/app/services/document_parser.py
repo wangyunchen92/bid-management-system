@@ -122,12 +122,16 @@ class DocumentParser:
         }
 
     def _table_to_markdown(self, table: list) -> str:
-        """表格转 Markdown"""
+        """表格转 Markdown（cell 内换行转 <br>，否则一个 cell 会跨行打散表格）"""
         if not table or not table[0]:
             return ""
-        # 清理 None
-        cleaned = [[str(cell or "").strip() for cell in row] for row in table]
-        # 跳过空行
+
+        def _clean_cell(cell) -> str:
+            s = str(cell or "").strip()
+            # cell 内换行转 <br>，避免 markdown 把 cell 内容当成新行解析
+            return s.replace("\r\n", "\n").replace("\n", "<br>")
+
+        cleaned = [[_clean_cell(c) for c in row] for row in table]
         cleaned = [row for row in cleaned if any(cell for cell in row)]
         if not cleaned:
             return ""
