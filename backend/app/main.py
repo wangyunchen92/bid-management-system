@@ -92,7 +92,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # 注册路由
-from app.routers import auth, system, approval, tender, decision, opening, library, bid, tender_doc, dashboard, knowledge
+from app.routers import auth, system, approval, tender, decision, opening, library, bid, tender_doc, dashboard, knowledge, bid_detect
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证管理"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["系统管理"])
@@ -102,6 +102,7 @@ app.include_router(decision.router, prefix="/api/v1/decision", tags=["投标决�
 app.include_router(opening.router, prefix="/api/v1/opening", tags=["开标跟踪"])
 app.include_router(library.router, prefix="/api/v1/library", tags=["企业资料库"])
 app.include_router(bid.router, prefix="/api/v1/bid", tags=["标书编制"])
+app.include_router(bid_detect.router, prefix="/api/v1/bid", tags=["标书检测"])
 app.include_router(tender_doc.router, prefix="/api/v1/tender-doc", tags=["招标文件解析"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["仪表盘"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["标书知识库"])
