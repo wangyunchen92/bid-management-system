@@ -21,6 +21,10 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    // blob 响应（文件下载）直接返回整个 response
+    if (response.config.responseType === 'blob') {
+      return response;
+    }
     const { data } = response;
     if (data.code !== undefined && data.code !== 200) {
       message.error(data.message || '请求失败');
@@ -35,7 +39,7 @@ request.interceptors.response.use(
         case 401:
           message.error('登录已过期，请重新登录');
           clearTokens();
-          window.location.href = '/login';
+          window.location.href = import.meta.env.BASE_URL + 'login';
           break;
         case 403:
           message.error('没有权限访问该资源');

@@ -52,7 +52,7 @@ export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={themeConfig}>
       <AntdApp>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <AppRoutes />
         </BrowserRouter>
       </AntdApp>
