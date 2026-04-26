@@ -1,9 +1,11 @@
 """
 招标文件解析路由
 """
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.deps import get_current_user_id, get_db
@@ -13,7 +15,7 @@ from app.services.tender_doc_service import tender_doc_service
 router = APIRouter()
 
 
-@router.post("/upload", summary="上传并解析招标文件")
+@router.post("/upload", summary="上传并解析招标文件（SSE 流式）")
 async def upload_and_parse(
     file: UploadFile = File(...),
     project_id: Optional[int] = Query(default=None),
@@ -21,10 +23,20 @@ async def upload_and_parse(
     db: AsyncSession = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    result = await tender_doc_service.upload_and_parse(
-        db, file, user_id, project_id=project_id, tender_id=tender_id,
-    )
-    return success(data=result, message="文件解析完成" if result.get("parse_status") == "COMPLETED" else "文件解析失败")
+    """SSE 流式推送上传/提取/OCR/解析进度
+
+    必须在 generator 启动前读取文件内容，否则 multipart 临时文件会被关闭
+    """
+    content = await file.read()
+    filename = file.filename
+
+    async def event_generator():
+        async for event in tender_doc_service.upload_and_parse_stream(
+            db, content, filename, user_id, project_id=project_id, tender_id=tender_id,
+        ):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get("/{doc_id}", summary="获取文档详情")
