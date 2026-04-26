@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, Empty, Spin,
-  Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App, Tabs } from 'antd';
+  Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App, Tabs, Segmented } from 'antd';
 import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
@@ -21,48 +21,9 @@ import {
 import type { DetectItem, DetectReport, DetectReportListItem } from '@/services/bid';
 import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
+import MarkdownContent from '@/components/MarkdownContent';
+import RichTextEditor from '@/components/RichTextEditor';
 import { LIBRARY_API } from '@/constants/api';
-
-/** 将内容中的 [附件:path:name] 标记渲染为可点击链接 */
-function renderContentWithAttachments(text: string): React.ReactNode {
-  const parts = text.split(/(\[附件:[^\]]+\])/g);
-  if (parts.length === 1) return text;
-  return parts.map((part, i) => {
-    const match = part.match(/\[附件:([^:]+):([^\]]+)\]/);
-    if (match) {
-      const [, filePath, fileName] = match;
-      const url = LIBRARY_API.FILE_URL(filePath);
-      const ext = filePath.split('.').pop()?.toLowerCase();
-      const isImage = ['jpg', 'jpeg', 'png'].includes(ext || '');
-      return (
-        <span key={i}>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '2px 8px',
-              background: '#f0fdfa',
-              border: '1px solid #99f6e4',
-              borderRadius: 4,
-              color: '#0d9488',
-              fontSize: 13,
-              textDecoration: 'none',
-              margin: '2px 0',
-            }}
-          >
-            {isImage ? '🖼' : '📄'} {fileName}
-            <span style={{ fontSize: 11, color: '#94a3b8' }}>（点击查看）</span>
-          </a>
-        </span>
-      );
-    }
-    return <span key={i}>{part}</span>;
-  });
-}
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -265,6 +226,7 @@ export default function BidWorkbenchPage() {
   const [editStatus, setEditStatus] = useState('PENDING');
   const [editAssigneeId, setEditAssigneeId] = useState<number | undefined>(undefined);
   const [savingContent, setSavingContent] = useState(false);
+  const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('edit');
 
   // 用户选项
   const [userOptions, setUserOptions] = useState<{ value: number; label: string }[]>([]);
@@ -1067,18 +1029,42 @@ export default function BidWorkbenchPage() {
                     </div>
                   </div>
                 )}
-                <TextArea
-                  value={editContent}
-                  onChange={(e) => { setEditContent(e.target.value); contentChanged.current = true; }}
-                  rows={20}
-                  placeholder="在此输入章节内容..."
-                  style={{
-                    fontSize: 14,
-                    lineHeight: 1.8,
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                  }}
-                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Segmented
+                    size="small"
+                    value={editorMode}
+                    onChange={(v) => setEditorMode(v as 'edit' | 'preview')}
+                    options={[
+                      { label: '编辑', value: 'edit' },
+                      { label: '预览', value: 'preview' },
+                    ]}
+                  />
+                </div>
+                {editorMode === 'edit' ? (
+                  <RichTextEditor
+                    value={editContent}
+                    onChange={(md) => { setEditContent(md); contentChanged.current = true; }}
+                    placeholder="在此输入章节内容（工具栏支持表格、列表、加粗等）..."
+                    minHeight={480}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      minHeight: 480,
+                      padding: '12px 16px',
+                      background: '#fff',
+                      border: '1px solid #d9d9d9',
+                      borderRadius: 6,
+                      fontSize: 14,
+                    }}
+                  >
+                    {editContent ? (
+                      <MarkdownContent content={editContent} />
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>暂无内容</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 底部保存按钮 */}
@@ -1232,9 +1218,7 @@ export default function BidWorkbenchPage() {
       >
         <div
           style={{
-            whiteSpace: 'pre-wrap',
             fontSize: 14,
-            lineHeight: 1.8,
             padding: '12px 16px',
             background: '#fafafa',
             borderRadius: 8,
@@ -1244,7 +1228,11 @@ export default function BidWorkbenchPage() {
             overflow: 'auto',
           }}
         >
-          {aiGenResult || (aiGenLoading ? '等待 AI 响应...' : '暂无内容')}
+          {aiGenResult ? (
+            <MarkdownContent content={aiGenResult} />
+          ) : (
+            <span style={{ color: '#94a3b8' }}>{aiGenLoading ? '等待 AI 响应...' : '暂无内容'}</span>
+          )}
           {aiGenLoading && <span style={{ animation: 'blink 1s infinite', borderRight: '2px solid #0d9488' }}>&nbsp;</span>}
         </div>
       </Modal>
@@ -1428,16 +1416,12 @@ export default function BidWorkbenchPage() {
                 {/* 章节内容 */}
                 {section.content ? (
                   <div style={{
-                    whiteSpace: 'pre-wrap',
-                    lineHeight: 1.8,
                     fontSize: 14,
                     color: '#1e293b',
                     paddingLeft: 16,
                     borderLeft: '3px solid #e2e8f0',
                   }}>
-                    {/\[附件:/.test(section.content)
-                      ? renderContentWithAttachments(section.content)
-                      : section.content}
+                    <MarkdownContent content={section.content} />
                   </div>
                 ) : (
                   <div style={{

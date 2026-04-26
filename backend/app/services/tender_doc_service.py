@@ -1,12 +1,15 @@
 """
 招标文件管理服务 — 上传、提取、AI 解析
 """
+import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import AsyncGenerator
 
 from fastapi import UploadFile
 from sqlalchemy import select
@@ -27,6 +30,163 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 class TenderDocService:
+
+    async def upload_and_parse_stream(self, db: AsyncSession, content: bytes, filename: str, user_id: int,
+                                       project_id: int = None, tender_id: int = None) -> AsyncGenerator[dict, None]:
+        """上传并解析（SSE 流式版本，推送进度事件）
+
+        注意：file content 必须在调用前读出，因为 generator 异步执行时
+        multipart 上传文件会被关闭。
+        """
+        # 1. 验证文件
+        ext = Path(filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            yield {"type": "error", "message": f"不支持的文件格式 {ext}，仅支持 PDF 和 DOCX"}
+            return
+
+        if len(content) > MAX_FILE_SIZE:
+            yield {"type": "error", "message": f"文件大小超过限制（最大 {MAX_FILE_SIZE // 1024 // 1024}MB）"}
+            return
+
+        yield {"type": "uploading", "message": "保存文件..."}
+
+        # 2. 保存文件
+        file_id = str(uuid.uuid4())
+        rel_dir = os.path.join("tender_docs", datetime.now().strftime("%Y%m"))
+        abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
+        os.makedirs(abs_dir, exist_ok=True)
+        stored_filename = f"{file_id}{ext}"
+        stored_path = os.path.join(rel_dir, stored_filename)
+        abs_path = os.path.join(abs_dir, stored_filename)
+        with open(abs_path, "wb") as f:
+            f.write(content)
+
+        # 3. 创建数据库记录
+        doc = TenderDocument(
+            project_id=project_id, tender_id=tender_id,
+            original_name=filename, stored_path=stored_path,
+            file_size=len(content), file_type=ext.lstrip("."),
+            parse_status="EXTRACTING",
+            created_by=user_id, updated_by=user_id,
+        )
+        db.add(doc)
+        await db.flush()
+        await db.refresh(doc)
+        doc_id = doc.id
+
+        # 流水线总耗时埋点
+        t_pipeline_start = time.perf_counter()
+        timings = {"file_size_kb": round(len(content) / 1024, 1)}
+
+        yield {"type": "extracting", "message": "提取文本..."}
+
+        # 4. 提取文本
+        t_extract0 = time.perf_counter()
+        try:
+            extract_result = await asyncio.to_thread(document_parser.extract_text, abs_path)
+            doc.page_count = extract_result["page_count"]
+            text = extract_result["text"]
+            timings["extract"] = round(time.perf_counter() - t_extract0, 2)
+            timings.update(extract_result.get("timing", {}))
+        except Exception as e:
+            doc.parse_status = "FAILED"
+            doc.error_message = f"文本提取失败: {str(e)}"
+            await db.flush()
+            await db.commit()
+            logger.error(f"文本提取失败: {e}")
+            yield {"type": "error", "message": str(e)}
+            return
+
+        # 4.5 扫描件检测 + 视觉 OCR 兜底
+        avg_chars_per_page = len(text) / max(doc.page_count, 1)
+        if ext == ".pdf" and avg_chars_per_page < 50:
+            total_pages = doc.page_count
+            pages_to_process = min(total_pages, 100)
+            yield {
+                "type": "ocr_start",
+                "total_pages": total_pages,
+                "pages_to_process": pages_to_process,
+                "message": f"检测到扫描件，开始 OCR（共 {total_pages} 页，处理前 {pages_to_process} 页）",
+            }
+            doc.parse_status = "OCR"
+            await db.flush()
+            await db.commit()
+
+            t_ocr0 = time.perf_counter()
+            all_text = []
+            for i in range(pages_to_process):
+                yield {
+                    "type": "ocr_page",
+                    "current": i + 1,
+                    "total": pages_to_process,
+                    "message": f"OCR 第 {i + 1}/{pages_to_process} 页...",
+                }
+                try:
+                    page_text = await asyncio.to_thread(tender_ai_parser.ocr_single_page, abs_path, i)
+                    all_text.append(f"--- 第 {i+1} 页 ---\n{page_text}")
+                    logger.info(f"OCR 第 {i+1}/{pages_to_process} 页完成（{len(page_text)} 字）")
+                except Exception as e:
+                    logger.warning(f"OCR 第 {i+1} 页失败: {e}")
+                    all_text.append(f"--- 第 {i+1} 页 ---\n[OCR 失败]")
+                    yield {"type": "ocr_page_failed", "page": i + 1, "error": str(e)}
+
+            text = "\n\n".join(all_text)
+            if total_pages > pages_to_process:
+                text += f"\n\n[文档共 {total_pages} 页，仅处理了前 {pages_to_process} 页]"
+            timings["ocr_total"] = round(time.perf_counter() - t_ocr0, 2)
+            timings["ocr_pages"] = pages_to_process
+            timings["ocr_avg_per_page"] = round(timings["ocr_total"] / max(pages_to_process, 1), 2)
+            logger.info(
+                f"[TIMING] OCR 全部完成: 总 {timings['ocr_total']}s | {pages_to_process} 页 | 均 {timings['ocr_avg_per_page']}s/页"
+            )
+            yield {"type": "ocr_done", "message": f"OCR 完成（{len(text)} 字）"}
+
+        doc.raw_text = text
+        doc.parse_status = "PARSING"
+        await db.flush()
+        await db.commit()
+
+        yield {"type": "parsing", "message": "AI 解析中..."}
+
+        # 5. AI 解析
+        t_ai0 = time.perf_counter()
+        try:
+            parse_result = await asyncio.to_thread(tender_ai_parser.parse, text)
+            timings["ai_parse"] = round(time.perf_counter() - t_ai0, 2)
+            doc.parse_result = json.dumps(parse_result, ensure_ascii=False)
+            doc.parse_status = "COMPLETED"
+            await db.flush()
+            await db.commit()
+        except Exception as e:
+            doc.parse_status = "FAILED"
+            doc.error_message = f"AI 解析失败: {str(e)}"
+            await db.flush()
+            await db.commit()
+            logger.error(f"AI 解析失败: {e}")
+            yield {"type": "error", "message": str(e)}
+            return
+
+        await db.refresh(doc)
+
+        # 6. 自动保存到招标信息（如果尚未关联）
+        try:
+            yield {"type": "linking", "message": "自动保存到招标信息..."}
+            link_result = await self.save_to_tender(db, doc.id, user_id)
+            await db.commit()
+            await db.refresh(doc)
+            yield {
+                "type": "linked",
+                "tender_id": link_result["tender_id"],
+                "action": link_result["action"],
+                "message": f"已{('更新' if link_result['action'] == 'updated' else '创建')}招标信息（{len(link_result['fields_updated'])} 个字段）",
+            }
+        except Exception as e:
+            logger.warning(f"自动保存到招标信息失败（不影响解析）: {e}")
+            yield {"type": "link_failed", "message": f"自动关联失败：{str(e)[:100]}"}
+
+        timings["pipeline_total"] = round(time.perf_counter() - t_pipeline_start, 2)
+        logger.info(f"[TIMING] 招标文件解析流水线完成: {timings}")
+        yield {"type": "done", "doc": self._doc_to_dict(doc), "timing": timings}
 
     async def upload_and_parse(self, db: AsyncSession, file: UploadFile, user_id: int,
                                 project_id: int = None, tender_id: int = None) -> dict:
@@ -74,7 +234,21 @@ class TenderDocService:
         try:
             extract_result = document_parser.extract_text(abs_path)
             doc.page_count = extract_result["page_count"]
-            doc.raw_text = extract_result["text"]
+            text = extract_result["text"]
+
+            # 扫描件检测：每页平均文本 < 50 字 → 视为扫描件，启用视觉 OCR 兜底
+            avg_chars_per_page = len(text) / max(doc.page_count, 1)
+            if ext == ".pdf" and avg_chars_per_page < 50:
+                logger.info(f"检测到扫描件 PDF（{doc.page_count} 页平均 {avg_chars_per_page:.0f} 字/页），启用视觉 OCR")
+                doc.parse_status = "OCR"
+                await db.flush()
+                try:
+                    text = tender_ai_parser.ocr_pdf_with_vision(abs_path, max_pages=100)
+                    logger.info(f"OCR 完成，共 {len(text)} 字")
+                except Exception as ocr_err:
+                    logger.warning(f"视觉 OCR 失败，使用原始文本: {ocr_err}")
+
+            doc.raw_text = text
             doc.parse_status = "PARSING"
             await db.flush()
         except Exception as e:
@@ -86,7 +260,7 @@ class TenderDocService:
 
         # 5. AI 解析
         try:
-            parse_result = tender_ai_parser.parse(extract_result["text"])
+            parse_result = tender_ai_parser.parse(text)
             doc.parse_result = json.dumps(parse_result, ensure_ascii=False)
             doc.parse_status = "COMPLETED"
             await db.flush()

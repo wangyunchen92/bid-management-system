@@ -117,3 +117,70 @@ body {
 .ant-modal .ant-modal-content {
   border-radius: var(--radius-card) !important;
 }
+
+/* ── TipTap 富文本编辑器 ─────────────────────────────── */
+.tiptap-wrapper .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+.tiptap-wrapper .ProseMirror p { margin: 6px 0; }
+.tiptap-wrapper .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.tiptap-wrapper .ProseMirror h1 { font-size: 20px; font-weight: 700; margin: 14px 0 8px; }
+.tiptap-wrapper .ProseMirror h2 { font-size: 17px; font-weight: 700; margin: 12px 0 6px; }
+.tiptap-wrapper .ProseMirror h3 { font-size: 15px; font-weight: 600; margin: 10px 0 4px; }
+.tiptap-wrapper .ProseMirror ul,
+.tiptap-wrapper .ProseMirror ol { padding-left: 22px; margin: 6px 0; }
+.tiptap-wrapper .ProseMirror li { margin: 2px 0; }
+.tiptap-wrapper .ProseMirror blockquote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid #14b8a6;
+  background: #f0fdfa;
+}
+.tiptap-wrapper .ProseMirror a {
+  color: #0d9488;
+  text-decoration: underline;
+}
+
+/* 表格样式 */
+.tiptap-wrapper .ProseMirror table {
+  border-collapse: collapse;
+  margin: 12px 0;
+  table-layout: fixed;
+  width: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+.tiptap-wrapper .ProseMirror table th,
+.tiptap-wrapper .ProseMirror table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 10px;
+  vertical-align: top;
+  position: relative;
+  min-width: 60px;
+}
+.tiptap-wrapper .ProseMirror table th {
+  background: #f1f5f9;
+  font-weight: 600;
+  text-align: left;
+}
+.tiptap-wrapper .ProseMirror table .selectedCell {
+  background: rgba(13, 148, 136, 0.12);
+}
+.tiptap-wrapper .ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: #14b8a6;
+  cursor: col-resize;
+  pointer-events: none;
+}
+.tiptap-wrapper .ProseMirror.resize-cursor { cursor: col-resize; }
