@@ -703,6 +703,19 @@ class BidFrameworkService:
         """
         import re
 
+        # 8-pre. 修复 cell 跨行的断行：「| xxx | yyy |\nzzz |」→「| xxx | yyy<br>zzz |」
+        # AI 抽出的 markdown 偶尔会保留 cell 内换行，导致后续行被 markdown 当成正文
+        # 「| 报价 | 大写：百分之 |\n小写： |」→「| 报价 | 大写：百分之 <br>小写： |」
+        prev_loop = None
+        while prev_loop != content:
+            prev_loop = content
+            content = re.sub(
+                r'(^\|[^\n]*?)\|\s*\n([^|\n][^\n]*?)\|',
+                r'\g<1><br>\g<2>|',
+                content,
+                flags=re.MULTILINE,
+            )
+
         lines = content.split('\n')
 
         # 8a. 表格行规整：补齐缺失的尾部 |、按分隔符行的列数对齐
