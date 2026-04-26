@@ -694,6 +694,58 @@ class BidFrameworkService:
 
         return content
 
+    def _join_broken_table_rows(self, content: str) -> str:
+        """合并被换行/空行打散的 markdown 表格行。
+
+        处理两类常见情况：
+          A. 表格行末尾就是 |，但下一非空行（也以 | 结尾，但不以 | 开头）应该并到本行最后一个 cell
+          B. 表格行不以 | 结尾（中途断了），下一非空行（不以 | 开头但以 | 结尾）应当合并
+        """
+        import re as _re
+
+        sep_re = _re.compile(r'^\|[\s\-:|]+\|$')
+        lines = content.split('\n')
+        result = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.rstrip()
+            if not stripped.startswith('|') or sep_re.match(stripped):
+                result.append(line)
+                i += 1
+                continue
+
+            row = stripped
+            j = i + 1
+
+            # B. 当前行不以 | 结尾 → 吸收非 | 开头的非空行
+            while not row.rstrip().endswith('|') and j < len(lines):
+                nxt = lines[j].rstrip()
+                if nxt == '':
+                    j += 1
+                    continue
+                if nxt.startswith('|'):
+                    break
+                row = row.rstrip() + '<br>' + nxt.lstrip()
+                j += 1
+
+            # A. 当前行以 | 结尾，但后面紧跟「非|开头 + 以|结尾」的延续行
+            while row.rstrip().endswith('|') and j < len(lines):
+                k = j
+                while k < len(lines) and lines[k].rstrip() == '':
+                    k += 1
+                if k >= len(lines):
+                    break
+                nxt = lines[k].rstrip()
+                if nxt.startswith('|') or not nxt.endswith('|'):
+                    break
+                row = row.rstrip()[:-1].rstrip() + '<br>' + nxt[:-1].rstrip() + ' |'
+                j = k + 1
+
+            result.append(row)
+            i = j
+        return '\n'.join(result)
+
     def _format_template(self, content: str, section_type: str = None) -> str:
         """标书模板格式规范化：
         - 空 markdown 单元格 → ____
@@ -703,18 +755,11 @@ class BidFrameworkService:
         """
         import re
 
-        # 8-pre. 修复 cell 跨行的断行：「| xxx | yyy |\nzzz |」→「| xxx | yyy<br>zzz |」
-        # AI 抽出的 markdown 偶尔会保留 cell 内换行，导致后续行被 markdown 当成正文
-        # 「| 报价 | 大写：百分之 |\n小写： |」→「| 报价 | 大写：百分之 <br>小写： |」
-        prev_loop = None
-        while prev_loop != content:
-            prev_loop = content
-            content = re.sub(
-                r'(^\|[^\n]*?)\|\s*\n([^|\n][^\n]*?)\|',
-                r'\g<1><br>\g<2>|',
-                content,
-                flags=re.MULTILINE,
-            )
+        # 8-pre. 合并被换行/空行打散的表格行
+        # AI 抽出的模板里 cell 换行会出现两类断行：
+        #   A. 行尾「|」+ 续行：「| 报价 | 大写：x |\n小写： |」→「| 报价 | 大写：x<br>小写： |」
+        #   B. 行内「|」+ 续行：「| 序号 | 偏\n\n离说明 |」→「| 序号 | 偏<br>离说明 |」
+        content = self._join_broken_table_rows(content)
 
         # 8-pre2. 去掉相邻表格行之间的空行（markdown 把空行当表格结束，导致后续行不被识别）
         prev_loop = None
