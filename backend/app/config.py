@@ -60,6 +60,20 @@ class Settings(BaseSettings):
     COMPANY_BANK: str = "工行开发区支行"
     COMPANY_BANK_ACCOUNT: str = "1302011909024926532"
 
+    # 企业详情（用于法定代表人身份证明书等模板）
+    COMPANY_TYPE: str = "有限责任公司（自然人投资或控股）"
+    COMPANY_FOUNDED: str = "2002年02月06日"
+    COMPANY_BUSINESS_TERM: str = "2002年02月06日至2032年02月05日"
+
+    # 法定代表人详情
+    LEGAL_PERSON_GENDER: str = "男"
+    LEGAL_PERSON_AGE: str = "57"
+    LEGAL_PERSON_TITLE: str = "执行董事兼总经理"
+
+    # 授权代表（默认与法人同人，电话独立维护）
+    AUTHORIZED_REP_NAME: str = "吴晓东"
+    AUTHORIZED_REP_PHONE: str = "13075550821"
+
     @property
     def DATABASE_URL(self) -> str:
         if self.DB_TYPE == "sqlite":
