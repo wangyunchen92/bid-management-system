@@ -584,7 +584,19 @@ class BidFrameworkService:
                 tender_unit = tender.tender_unit or ""
 
         today = datetime.now()
-        company_name = settings.COMPANY_NAME
+
+        # 企业信息：优先读 sys_enterprise_profile（用户可在系统配置页编辑）
+        # 回退到 settings 默认值（首次部署、表未创建时）
+        from app.services.system_service import enterprise_profile_service
+        try:
+            ent = await enterprise_profile_service.get(db)
+            company_name = ent.company_name or settings.COMPANY_NAME
+        except Exception:
+            ent = None
+            company_name = settings.COMPANY_NAME
+
+        def ent_or(field_name, fallback):
+            return (getattr(ent, field_name, None) if ent else None) or fallback
 
         # 1. 替换已知的旧项目信息（来自安徽博物院投标文件模板）
         old_replacements = [
@@ -604,33 +616,33 @@ class BidFrameworkService:
             content
         )
 
-        # 3. 花括号占位符
+        # 3. 花括号占位符（企业信息从 sys_enterprise_profile 读，settings 兜底）
         replacements = {
             "{项目名称}": project_name,
             "{公司名称}": company_name,
-            "{公司地址}": settings.COMPANY_ADDRESS,
-            "{公司电话}": settings.COMPANY_PHONE,
-            "{公司传真}": settings.COMPANY_FAX,
-            "{公司邮编}": settings.COMPANY_ZIPCODE,
-            "{法定代表人}": settings.COMPANY_LEGAL_PERSON,
-            "{统一社会信用代码}": settings.COMPANY_CREDIT_CODE,
-            "{开户银行}": settings.COMPANY_BANK,
-            "{银行账号}": settings.COMPANY_BANK_ACCOUNT,
+            "{公司地址}": ent_or("company_address", settings.COMPANY_ADDRESS),
+            "{公司电话}": ent_or("company_phone", settings.COMPANY_PHONE),
+            "{公司传真}": ent_or("company_fax", settings.COMPANY_FAX),
+            "{公司邮编}": ent_or("company_zipcode", settings.COMPANY_ZIPCODE),
+            "{法定代表人}": ent_or("legal_person_name", settings.COMPANY_LEGAL_PERSON),
+            "{统一社会信用代码}": ent_or("company_credit_code", settings.COMPANY_CREDIT_CODE),
+            "{开户银行}": ent_or("company_bank", settings.COMPANY_BANK),
+            "{银行账号}": ent_or("company_bank_account", settings.COMPANY_BANK_ACCOUNT),
             "{日期}": today.strftime("%Y年%m月%d日"),
             "{年}": str(today.year),
             "{月}": str(today.month),
             "{日}": str(today.day),
             "{招标编号}": tender_no,
             "{招标单位}": tender_unit,
-            # 企业 / 法人详情（v1：库模板新增字段）
-            "{单位性质}": settings.COMPANY_TYPE,
-            "{成立时间}": settings.COMPANY_FOUNDED,
-            "{经营期限}": settings.COMPANY_BUSINESS_TERM,
-            "{法定代表人性别}": settings.LEGAL_PERSON_GENDER,
-            "{法定代表人年龄}": settings.LEGAL_PERSON_AGE,
-            "{法定代表人职务}": settings.LEGAL_PERSON_TITLE,
-            "{授权代表姓名}": settings.AUTHORIZED_REP_NAME,
-            "{授权代表电话}": settings.AUTHORIZED_REP_PHONE,
+            # 企业 / 法人详情
+            "{单位性质}": ent_or("company_type", settings.COMPANY_TYPE),
+            "{成立时间}": ent_or("company_founded", settings.COMPANY_FOUNDED),
+            "{经营期限}": ent_or("company_business_term", settings.COMPANY_BUSINESS_TERM),
+            "{法定代表人性别}": ent_or("legal_person_gender", settings.LEGAL_PERSON_GENDER),
+            "{法定代表人年龄}": ent_or("legal_person_age", settings.LEGAL_PERSON_AGE),
+            "{法定代表人职务}": ent_or("legal_person_title", settings.LEGAL_PERSON_TITLE),
+            "{授权代表姓名}": ent_or("authorized_rep_name", settings.AUTHORIZED_REP_NAME),
+            "{授权代表电话}": ent_or("authorized_rep_phone", settings.AUTHORIZED_REP_PHONE),
         }
         for placeholder, value in replacements.items():
             content = content.replace(placeholder, value)
