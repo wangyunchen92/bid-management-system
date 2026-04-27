@@ -194,6 +194,22 @@ SUPPLEMENT_CHAPTER = {
 }
 
 
+# ── 链路 A：标准应标函章节 → 知识库模板 id 映射 ─────────────────
+# 顺序敏感：长关键词在前（"最后承诺报价表" 必须早于 "报价表"）
+STANDARD_LETTER_TEMPLATES = [
+    (("最后承诺报价表", "最后报价表"), 14),
+    (("响应函", "磋商响应函", "投标函"), 1),
+    (("授权委托书", "授权书", "法人授权"), 2),
+    (("主要成交标的承诺", "成交标的承诺函"), 3),
+    (("无重大违法", "违法记录声明", "不良信用声明"), 4),
+    (("诚信履约承诺",), 5),
+    (("服务承诺函", "服务承诺"), 6),
+    (("法定代表人身份证明", "身份证明书", "法人身份证明"), 11),
+    (("中小企业声明",), 12),
+    (("报价表", "响应报价表", "投标报价表"), 13),
+]
+
+
 class BidFrameworkService:
 
     async def generate_framework(
@@ -342,20 +358,26 @@ class BidFrameworkService:
         # 5. 合并章节（解析章节 + ESSENTIAL_FALLBACK 补充 + 补充信息章节）
         merged = self._merge_chapters_for_tender(ai_chapters)
 
-        # 6. 批量创建 BidSection
+        # 6. 批量创建 BidSection（链路 A 路由分发）
         with_content = 0
         for i, chapter in enumerate(merged):
-            content = chapter.get("template") or ""
             section_type = chapter.get("section_type") or self._infer_type(chapter["title"])
+            ai_template = chapter.get("template") or ""
 
-            # TEMPLATE 类型且 AI 没抽到模板，回退用知识库模板
-            if section_type == "TEMPLATE" and not content:
-                template_id = await self._match_template(db, [chapter["title"]])
-                if template_id:
-                    content = await self._fill_template(db, template_id, project, section_type)
-            elif content:
-                # AI 抽出的模板也走占位符替换（中文括号填空、签章日期、{公司名称}等）
-                content = await self._apply_substitutions(db, content, project, section_type)
+            # ── 路由分发 ──
+            # 1. 标准应标函：直接用库模板（最高优先级，忽略 AI 抽出的 template）
+            std_template_id = self._match_standard_letter(chapter["title"])
+            if std_template_id:
+                content = await self._build_from_library(db, std_template_id, project)
+            # 2. AI 抽到 template：走 AI 抽取路径（含 markdown 修复）
+            elif ai_template:
+                content = await self._build_from_ai_extract(db, ai_template, project, section_type)
+            # 3. TEMPLATE 类型 + 无 AI 抽：兜底匹配关键词找库模板
+            elif section_type == "TEMPLATE":
+                fallback_id = await self._match_template(db, [chapter["title"]])
+                content = await self._build_from_library(db, fallback_id, project) if fallback_id else ""
+            else:
+                content = ""
 
             section = BidSection(
                 project_id=project_id,
@@ -505,18 +527,45 @@ class BidFrameworkService:
         await db.flush()
         return best.id
 
-    async def _fill_template(self, db: AsyncSession, template_id: int, project: BidProject, section_type: str = "TEMPLATE") -> str:
-        """从知识库加载模板并填充当前项目信息"""
+    def _match_standard_letter(self, chapter_title: str) -> Optional[int]:
+        """章节标题命中标准应标函关键词 → 返回库模板 id（链路 A 入口）
+
+        顺序敏感：长关键词优先（"最后承诺报价表" 早于 "报价表"），STANDARD_LETTER_TEMPLATES
+        已按此排序。匹配规则：标题包含关键词即命中。
+        """
+        title = (chapter_title or "").strip()
+        if not title:
+            return None
+        for keywords, template_id in STANDARD_LETTER_TEMPLATES:
+            if any(kw in title for kw in keywords):
+                return template_id
+        return None
+
+    async def _build_from_library(self, db: AsyncSession, template_id: int, project: BidProject) -> str:
+        """链路 A：库模板路径——加载库模板，仅做占位符替换，不做 markdown 修复"""
         result = await db.execute(
             select(KnowledgeTemplate).where(KnowledgeTemplate.id == template_id)
         )
         template = result.scalar_one_or_none()
         if not template or not template.content:
             return ""
-        return await self._apply_substitutions(db, template.content, project, section_type)
+        # 库模板内容是清洁的，不需要 _normalize_ai_extracted_markdown
+        return await self._apply_substitutions(db, template.content, project, _from_library=True)
 
-    async def _apply_substitutions(self, db: AsyncSession, content: str, project: BidProject, section_type: str = None) -> str:
-        """对任意模板文本做占位符替换（旧项目文本/花括号占位/中文括号填空/markdown 空格填充/签章日期）"""
+    async def _build_from_ai_extract(self, db: AsyncSession, raw_template: str, project: BidProject, section_type: str) -> str:
+        """链路 A：AI 抽取路径——占位符替换 + markdown 修复（仅项目特定章节用）"""
+        return await self._apply_substitutions(db, raw_template, project, section_type, _from_library=False)
+
+    async def _fill_template(self, db: AsyncSession, template_id: int, project: BidProject, section_type: str = "TEMPLATE") -> str:
+        """从知识库加载模板并填充（兼容旧接口；新代码请用 _build_from_library）"""
+        return await self._build_from_library(db, template_id, project)
+
+    async def _apply_substitutions(self, db: AsyncSession, content: str, project: BidProject, section_type: str = None, _from_library: bool = False) -> str:
+        """对任意模板文本做占位符替换（旧项目文本/花括号占位/中文括号填空/markdown 空格填充/签章日期）
+
+        _from_library=True：跳过 _format_template / 表格修复（库模板已是清洁 markdown）
+        _from_library=False：执行完整修复（AI 抽出的模板需要修）
+        """
         import re
         from datetime import datetime
         from app.config import settings
@@ -573,6 +622,15 @@ class BidFrameworkService:
             "{日}": str(today.day),
             "{招标编号}": tender_no,
             "{招标单位}": tender_unit,
+            # 企业 / 法人详情（v1：库模板新增字段）
+            "{单位性质}": settings.COMPANY_TYPE,
+            "{成立时间}": settings.COMPANY_FOUNDED,
+            "{经营期限}": settings.COMPANY_BUSINESS_TERM,
+            "{法定代表人性别}": settings.LEGAL_PERSON_GENDER,
+            "{法定代表人年龄}": settings.LEGAL_PERSON_AGE,
+            "{法定代表人职务}": settings.LEGAL_PERSON_TITLE,
+            "{授权代表姓名}": settings.AUTHORIZED_REP_NAME,
+            "{授权代表电话}": settings.AUTHORIZED_REP_PHONE,
         }
         for placeholder, value in replacements.items():
             content = content.replace(placeholder, value)
@@ -624,17 +682,23 @@ class BidFrameworkService:
             content
         )
 
-        # 7. 表格上下补空行（避免 markdown 解析器把表格上下文吃进表格）
-        # 7a. 表格行「| ... |」后紧跟非空非|行 → 插空行
+        # 7. 资料库附件自动填入（库模板和 AI 抽取都需要：身份证扫描件、营业执照等）
+        content = await self._fill_from_library(db, content)
+
+        # ── 库模板路径到此结束（已是清洁 markdown，无需后续修复）──
+        if _from_library:
+            return re.sub(r'\n{3,}', '\n\n', content)
+
+        # ── AI 抽取路径：继续做 markdown 修复 ──
+
+        # 8. 表格上下补空行（避免 markdown 解析器把表格上下文吃进表格）
+        # 8a. 表格行「| ... |」后紧跟非空非|行 → 插空行
         content = re.sub(r'(^\|[^\n]*\|)\n(?!\n|\|)', r'\1\n\n', content, flags=re.MULTILINE)
-        # 7b. 非空非|行紧跟「| ... |」首行 → 插空行
+        # 8b. 非空非|行紧跟「| ... |」首行 → 插空行
         content = re.sub(r'(^[^|\n][^\n]*)\n(\|[^\n]*\|)', r'\1\n\n\2', content, flags=re.MULTILINE)
 
-        # 8. 标书填空规范化（空单元格、签章块、段落分隔）
+        # 9. 标书填空规范化（空单元格、签章块、段落分隔、表格行合并）
         content = self._format_template(content, section_type)
-
-        # 9. 资料库自动填入（身份证扫描件、营业执照等）
-        content = await self._fill_from_library(db, content)
 
         # 10. 清理连续空行
         content = re.sub(r'\n{3,}', '\n\n', content)
