@@ -93,6 +93,65 @@ TEMPLATE_PRICE_TABLE = """1-1 报价表
 4. 如供应商电子交易系统中填写的报价与响应文件中签章的报价表不一致，以响应文件中签章的报价表为准。
 """
 
+TEMPLATE_QUALIFICATION_DECLARATION = """供应商资格声明书
+
+致：{招标单位}
+
+在参与本次项目磋商中，我单位承诺：
+
+（一）具有良好的商业信誉和健全的财务会计制度；
+
+（二）具有履行合同所必需的设备和专业技术能力；
+
+（三）有依法缴纳税收和社会保障资金的良好记录；
+
+（四）参加采购活动前三年内，在经营活动中没有重大违法记录（重大违法记录指因违法经营受到刑事处罚或者责令停产停业、吊销许可证或者执照、较大数额罚款等行政处罚，不包括因违法经营被禁止在一定期限内参加采购活动，但期限已经届满的情形）；
+
+（五）我单位不存在为采购项目提供整体设计、规范编制或者项目管理、监理、检测等服务后，再参加该采购项目的其他采购活动的情形（单一来源采购项目除外）；
+
+（六）我单位（含不具有独立法人资格的分支机构）无以下不良信用记录情形：
+（1）被人民法院列入失信被执行人；
+（2）被税务部门列入重大税收违法案件当事人名单；
+（3）被政府采购监管部门列入政府采购严重违法失信行为记录名单。
+
+（七）我单位不属于行政法规规定的公益一类事业单位、或使用事业编制且由财政拨款保障的群团组织；
+
+（八）我单位无"单位负责人为同一人或者存在直接控股、管理关系的不同供应商，参加同一合同项下的采购活动"的情形。与我单位存在单位负责人为同一人或者存在直接控股、管理关系的其他法人单位信息如下（如有，不论其是否参加同一合同项下的采购活动均须填写）：
+
+| 序号 | 单位名称 | 相互关系 |
+| --- | --- | --- |
+| 1 | ____ | ____ |
+| 2 | ____ | ____ |
+
+本单位对上述声明的真实性负责。如有虚假，将依法承担相应责任。
+
+供应商电子签章：{公司名称}（盖章）
+
+日期：{日期}
+"""
+
+TEMPLATE_BUSINESS_RESPONSE_TABLE = """商务响应表
+
+| 序号 | 商务条款 | 磋商文件要求 | 供应商承诺 | 偏离说明 |
+| --- | --- | --- | --- | --- |
+| 1 | 付款方式 | 详见磋商文件 | 完全响应 | 无偏离 |
+| 2 | 服务地点 | 详见磋商文件 | 完全响应 | 无偏离 |
+| 3 | 服务期限 | 详见磋商文件 | 完全响应 | 无偏离 |
+| 4 | 服务标准 | 详见磋商文件 | 完全响应 | 无偏离 |
+| 5 | 验收方式 | 详见磋商文件 | 完全响应 | 无偏离 |
+
+磋商文件中所列商务要求，我公司确认，对磋商文件所列商务要求，除以上响应表所列情况外，我方响应情况全部为"无偏离"。
+
+供应商电子签章：{公司名称}（盖章）
+
+日期：{日期}
+
+注：
+1. "无偏离"指与竞争性磋商文件要求一致，"正偏离"指优于竞争性磋商文件要求；"负偏离"指低于竞争性磋商文件要求。
+2. 无论正偏离或负偏离，供应商均需在"供应商承诺"一栏中列明响应的详细内容，否则视同供应商响应情况为"无偏离"。
+3. 如供应商未在上述偏离表中填写内容，视同供应商响应情况为"无偏离"。
+"""
+
 TEMPLATE_FINAL_PRICE_TABLE = """1-2 最后承诺报价表
 
 （第　次报价书）
@@ -179,6 +238,34 @@ def main():
             VALUES (14, ?, 'PRICE', ?, '最后承诺报价表,最后报价,通用模板', 0, ?, ?, 0)
         """, ("最后承诺报价表（通用模板）", TEMPLATE_FINAL_PRICE_TABLE, now, now))
         print(f"✓ 新增 id=14 最后承诺报价表（通用模板）")
+
+    # ── 新增 id=15 供应商资格声明书 ──
+    c.execute("SELECT id FROM knowledge_template WHERE id=15")
+    if c.fetchone():
+        c.execute("UPDATE knowledge_template SET title=?, content=?, category=?, tags=?, updated_at=? WHERE id=15",
+                  ("供应商资格声明书（通用模板）", TEMPLATE_QUALIFICATION_DECLARATION, "COMMITMENT", "供应商资格,资格声明,声明书,通用模板", now))
+        print(f"✓ 更新 id=15 供应商资格声明书（通用模板）")
+    else:
+        c.execute("""
+            INSERT INTO knowledge_template (id, title, category, content, tags, usage_count,
+                                            created_at, updated_at, is_deleted)
+            VALUES (15, ?, 'COMMITMENT', ?, '供应商资格,资格声明,声明书,通用模板', 0, ?, ?, 0)
+        """, ("供应商资格声明书（通用模板）", TEMPLATE_QUALIFICATION_DECLARATION, now, now))
+        print(f"✓ 新增 id=15 供应商资格声明书（通用模板）")
+
+    # ── 新增 id=16 商务响应表 ──
+    c.execute("SELECT id FROM knowledge_template WHERE id=16")
+    if c.fetchone():
+        c.execute("UPDATE knowledge_template SET title=?, content=?, category=?, tags=?, updated_at=? WHERE id=16",
+                  ("商务响应表（通用模板）", TEMPLATE_BUSINESS_RESPONSE_TABLE, "COMMITMENT", "商务响应表,商务条款,通用模板", now))
+        print(f"✓ 更新 id=16 商务响应表（通用模板）")
+    else:
+        c.execute("""
+            INSERT INTO knowledge_template (id, title, category, content, tags, usage_count,
+                                            created_at, updated_at, is_deleted)
+            VALUES (16, ?, 'COMMITMENT', ?, '商务响应表,商务条款,通用模板', 0, ?, ?, 0)
+        """, ("商务响应表（通用模板）", TEMPLATE_BUSINESS_RESPONSE_TABLE, now, now))
+        print(f"✓ 新增 id=16 商务响应表（通用模板）")
 
     conn.commit()
     conn.close()
