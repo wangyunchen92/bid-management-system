@@ -11,6 +11,7 @@ const Dict = lazy(() => import('@/pages/System/Dict'));
 const Department = lazy(() => import('@/pages/System/Department'));
 const User = lazy(() => import('@/pages/System/User'));
 const Role = lazy(() => import('@/pages/System/Role'));
+const Enterprise = lazy(() => import('@/pages/System/Enterprise'));
 const TenderList = lazy(() => import('@/pages/Tender/List'));
 const TenderForm = lazy(() => import('@/pages/Tender/Form'));
 const TenderCalendar = lazy(() => import('@/pages/Tender/Calendar'));
@@ -51,6 +52,7 @@ export default function AppRoutes() {
           <Route path="/system/user" element={<User />} />
           <Route path="/system/role" element={<Role />} />
           <Route path="/system/dict" element={<Dict />} />
+          <Route path="/system/enterprise" element={<Enterprise />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

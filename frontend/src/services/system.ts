@@ -98,3 +98,34 @@ export function getUserRoles(userId: number) {
 export function assignUserRoles(userId: number, roleIds: number[]) {
   return put<UserRoleInfo[]>(SYSTEM_API.ASSIGN_ROLES(userId), { role_ids: roleIds });
 }
+
+// ── 企业信息配置 ─────────────────────────────────────
+
+export interface EnterpriseProfile {
+  company_name: string;
+  company_address?: string;
+  company_phone?: string;
+  company_fax?: string;
+  company_zipcode?: string;
+  company_credit_code?: string;
+  company_bank?: string;
+  company_bank_account?: string;
+  company_type?: string;
+  company_founded?: string;
+  company_business_term?: string;
+  legal_person_name?: string;
+  legal_person_gender?: string;
+  legal_person_age?: string;
+  legal_person_title?: string;
+  authorized_rep_name?: string;
+  authorized_rep_phone?: string;
+  updated_at?: string;
+}
+
+export function getEnterpriseProfile() {
+  return get<EnterpriseProfile>(SYSTEM_API.ENTERPRISE_GET);
+}
+
+export function updateEnterpriseProfile(data: Partial<EnterpriseProfile>) {
+  return put<{ id: number; company_name: string }>(SYSTEM_API.ENTERPRISE_UPDATE, data);
+}

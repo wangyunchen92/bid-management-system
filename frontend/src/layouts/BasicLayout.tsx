@@ -66,6 +66,7 @@ const menuItems = [
     icon: <SettingOutlined />,
     label: '系统管理',
     children: [
+      { key: '/system/enterprise', label: '企业信息' },
       { key: '/system/department', icon: <ApartmentOutlined />, label: '组织架构' },
       { key: '/system/user', icon: <TeamOutlined />, label: '用户管理' },
       { key: '/system/role', icon: <SafetyCertificateOutlined />, label: '角色管理' },

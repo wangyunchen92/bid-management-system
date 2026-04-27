@@ -38,6 +38,9 @@ export const SYSTEM_API = {
   ROLE_DELETE: (id: number) => `${API_PREFIX}/system/roles/${id}`,
   USER_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
   ASSIGN_ROLES: (id: number) => `${API_PREFIX}/system/users/${id}/roles`,
+  // 企业信息配置
+  ENTERPRISE_GET: `${API_PREFIX}/system/enterprise`,
+  ENTERPRISE_UPDATE: `${API_PREFIX}/system/enterprise`,
 } as const;
 
 export const APPROVAL_API = {
