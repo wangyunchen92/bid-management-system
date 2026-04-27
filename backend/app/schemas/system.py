@@ -184,3 +184,50 @@ class RoleResponse(BaseModel):
 
 class AssignRolesRequest(BaseModel):
     role_ids: List[int] = Field(default_factory=list)
+
+
+# ---- 企业信息配置 ----
+
+class EnterpriseProfile(BaseModel):
+    """企业信息（标书模板占位符的数据源）"""
+    company_name: str = Field(default="", max_length=200)
+    company_address: Optional[str] = Field(default=None, max_length=500)
+    company_phone: Optional[str] = Field(default=None, max_length=50)
+    company_fax: Optional[str] = Field(default=None, max_length=50)
+    company_zipcode: Optional[str] = Field(default=None, max_length=20)
+    company_credit_code: Optional[str] = Field(default=None, max_length=50)
+    company_bank: Optional[str] = Field(default=None, max_length=100)
+    company_bank_account: Optional[str] = Field(default=None, max_length=100)
+    company_type: Optional[str] = Field(default=None, max_length=100)
+    company_founded: Optional[str] = Field(default=None, max_length=50)
+    company_business_term: Optional[str] = Field(default=None, max_length=100)
+    legal_person_name: Optional[str] = Field(default=None, max_length=50)
+    legal_person_gender: Optional[str] = Field(default=None, max_length=10)
+    legal_person_age: Optional[str] = Field(default=None, max_length=10)
+    legal_person_title: Optional[str] = Field(default=None, max_length=50)
+    authorized_rep_name: Optional[str] = Field(default=None, max_length=50)
+    authorized_rep_phone: Optional[str] = Field(default=None, max_length=50)
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EnterpriseProfileUpdate(BaseModel):
+    """全量更新企业信息（PUT 用，所有字段都是 Optional 以兼容部分修改）"""
+    company_name: Optional[str] = Field(default=None, max_length=200)
+    company_address: Optional[str] = Field(default=None, max_length=500)
+    company_phone: Optional[str] = Field(default=None, max_length=50)
+    company_fax: Optional[str] = Field(default=None, max_length=50)
+    company_zipcode: Optional[str] = Field(default=None, max_length=20)
+    company_credit_code: Optional[str] = Field(default=None, max_length=50)
+    company_bank: Optional[str] = Field(default=None, max_length=100)
+    company_bank_account: Optional[str] = Field(default=None, max_length=100)
+    company_type: Optional[str] = Field(default=None, max_length=100)
+    company_founded: Optional[str] = Field(default=None, max_length=50)
+    company_business_term: Optional[str] = Field(default=None, max_length=100)
+    legal_person_name: Optional[str] = Field(default=None, max_length=50)
+    legal_person_gender: Optional[str] = Field(default=None, max_length=10)
+    legal_person_age: Optional[str] = Field(default=None, max_length=10)
+    legal_person_title: Optional[str] = Field(default=None, max_length=50)
+    authorized_rep_name: Optional[str] = Field(default=None, max_length=50)
+    authorized_rep_phone: Optional[str] = Field(default=None, max_length=50)

@@ -85,3 +85,30 @@ class SysDictItem(Base):
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class SysEnterpriseProfile(BaseModel):
+    """企业信息配置（单行记录，id 永远为 1）—— 标书模板的占位符填值数据源"""
+    __tablename__ = "sys_enterprise_profile"
+
+    # 基础信息
+    company_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    company_address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    company_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    company_fax: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    company_zipcode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    company_credit_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    company_bank: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    company_bank_account: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # 详情
+    company_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    company_founded: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    company_business_term: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # 法定代表人
+    legal_person_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    legal_person_gender: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    legal_person_age: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    legal_person_title: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # 授权代表
+    authorized_rep_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    authorized_rep_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

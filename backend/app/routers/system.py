@@ -15,8 +15,9 @@ from app.schemas.system import (
     DepartmentCreate, DepartmentUpdate,
     UserCreate, UserUpdate,
     RoleCreate, RoleUpdate, AssignRolesRequest,
+    EnterpriseProfileUpdate,
 )
-from app.services.system_service import system_service
+from app.services.system_service import system_service, enterprise_profile_service
 
 router = APIRouter()
 
@@ -311,3 +312,43 @@ async def assign_user_roles(
 ):
     roles = await system_service.assign_user_roles(db, target_user_id, data.role_ids, user_id)
     return success(data=roles, message="角色分配成功")
+
+
+# ── 企业信息配置 ──────────────────────────────────────
+
+@router.get("/enterprise", summary="获取企业信息配置")
+async def get_enterprise_profile(
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    profile = await enterprise_profile_service.get(db)
+    return success(data={
+        "company_name": profile.company_name,
+        "company_address": profile.company_address,
+        "company_phone": profile.company_phone,
+        "company_fax": profile.company_fax,
+        "company_zipcode": profile.company_zipcode,
+        "company_credit_code": profile.company_credit_code,
+        "company_bank": profile.company_bank,
+        "company_bank_account": profile.company_bank_account,
+        "company_type": profile.company_type,
+        "company_founded": profile.company_founded,
+        "company_business_term": profile.company_business_term,
+        "legal_person_name": profile.legal_person_name,
+        "legal_person_gender": profile.legal_person_gender,
+        "legal_person_age": profile.legal_person_age,
+        "legal_person_title": profile.legal_person_title,
+        "authorized_rep_name": profile.authorized_rep_name,
+        "authorized_rep_phone": profile.authorized_rep_phone,
+        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+    })
+
+
+@router.put("/enterprise", summary="更新企业信息配置")
+async def update_enterprise_profile(
+    data: EnterpriseProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(require_super_admin),
+):
+    profile = await enterprise_profile_service.update(db, data.model_dump(exclude_unset=True), user_id)
+    return success(data={"id": profile.id, "company_name": profile.company_name}, message="企业信息已更新")

@@ -562,3 +562,61 @@ class SystemService:
 
 
 system_service = SystemService()
+
+
+# ── 企业信息配置（singleton，永远 id=1）──────────────────────
+
+class EnterpriseProfileService:
+
+    DEFAULT_ID = 1
+
+    async def get(self, db: AsyncSession):
+        """获取企业信息（不存在则用 settings 默认值创建一行）"""
+        from app.models.system import SysEnterpriseProfile
+        from app.config import settings
+
+        result = await db.execute(
+            select(SysEnterpriseProfile).where(SysEnterpriseProfile.id == self.DEFAULT_ID)
+        )
+        profile = result.scalar_one_or_none()
+        if profile is None:
+            profile = SysEnterpriseProfile(
+                id=self.DEFAULT_ID,
+                company_name=settings.COMPANY_NAME,
+                company_address=settings.COMPANY_ADDRESS,
+                company_phone=settings.COMPANY_PHONE,
+                company_fax=settings.COMPANY_FAX,
+                company_zipcode=settings.COMPANY_ZIPCODE,
+                company_credit_code=settings.COMPANY_CREDIT_CODE,
+                company_bank=settings.COMPANY_BANK,
+                company_bank_account=settings.COMPANY_BANK_ACCOUNT,
+                company_type=settings.COMPANY_TYPE,
+                company_founded=settings.COMPANY_FOUNDED,
+                company_business_term=settings.COMPANY_BUSINESS_TERM,
+                legal_person_name=settings.COMPANY_LEGAL_PERSON,
+                legal_person_gender=settings.LEGAL_PERSON_GENDER,
+                legal_person_age=settings.LEGAL_PERSON_AGE,
+                legal_person_title=settings.LEGAL_PERSON_TITLE,
+                authorized_rep_name=settings.AUTHORIZED_REP_NAME,
+                authorized_rep_phone=settings.AUTHORIZED_REP_PHONE,
+            )
+            db.add(profile)
+            await db.flush()
+            await db.commit()
+            await db.refresh(profile)
+        return profile
+
+    async def update(self, db: AsyncSession, data: dict, user_id: int):
+        """部分字段更新"""
+        profile = await self.get(db)
+        for k, v in data.items():
+            if v is not None and hasattr(profile, k):
+                setattr(profile, k, v)
+        profile.updated_by = user_id
+        await db.flush()
+        await db.commit()
+        await db.refresh(profile)
+        return profile
+
+
+enterprise_profile_service = EnterpriseProfileService()
