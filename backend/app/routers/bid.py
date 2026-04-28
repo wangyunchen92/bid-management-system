@@ -499,6 +499,92 @@ async def preview_document(
     })
 
 
+# ── 评分项（链路 B v1）──────────────────────────────────
+
+@router.get("/projects/{project_id}/scoring-items", summary="获取项目评分项列表")
+async def list_project_scoring_items(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    from app.models.bid import BidScoringItem, BidSectionScoringItem
+    items_res = await db.execute(
+        select(BidScoringItem)
+        .where(BidScoringItem.project_id == project_id, BidScoringItem.is_deleted == 0)
+        .order_by(BidScoringItem.sort_order, BidScoringItem.id)
+    )
+    items = items_res.scalars().all()
+    if items:
+        item_ids = [it.id for it in items]
+        link_res = await db.execute(
+            select(BidSectionScoringItem).where(BidSectionScoringItem.scoring_item_id.in_(item_ids))
+        )
+        links = link_res.scalars().all()
+        section_ids_per_item: dict[int, list[int]] = {iid: [] for iid in item_ids}
+        for ln in links:
+            section_ids_per_item[ln.scoring_item_id].append(ln.section_id)
+    else:
+        section_ids_per_item = {}
+    return success(data=[
+        {
+            "id": it.id,
+            "category": it.category,
+            "item_name": it.item_name,
+            "max_score": float(it.max_score) if it.max_score is not None else None,
+            "criteria": it.criteria,
+            "required_evidence": it.required_evidence,
+            "linked_chapter_hint": it.linked_chapter_hint,
+            "sort_order": it.sort_order,
+            "linked_section_ids": section_ids_per_item.get(it.id, []),
+        }
+        for it in items
+    ])
+
+
+@router.get("/sections/{section_id}/scoring-items", summary="获取章节关联的评分项")
+async def list_section_scoring_items(
+    section_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    from app.models.bid import BidScoringItem, BidSectionScoringItem
+    res = await db.execute(
+        select(BidScoringItem)
+        .join(BidSectionScoringItem, BidSectionScoringItem.scoring_item_id == BidScoringItem.id)
+        .where(BidSectionScoringItem.section_id == section_id, BidScoringItem.is_deleted == 0)
+        .order_by(BidSectionScoringItem.sort_order, BidScoringItem.sort_order)
+    )
+    items = res.scalars().all()
+    return success(data=[
+        {
+            "id": it.id,
+            "category": it.category,
+            "item_name": it.item_name,
+            "max_score": float(it.max_score) if it.max_score is not None else None,
+            "criteria": it.criteria,
+            "required_evidence": it.required_evidence,
+        }
+        for it in items
+    ])
+
+
+@router.put("/sections/{section_id}/scoring-items", summary="替换章节关联的评分项（全量）")
+async def replace_section_scoring_items(
+    section_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    from app.models.bid import BidSectionScoringItem
+    from sqlalchemy import delete
+    new_ids = payload.get("scoring_item_ids", [])
+    await db.execute(delete(BidSectionScoringItem).where(BidSectionScoringItem.section_id == section_id))
+    for idx, sid in enumerate(new_ids):
+        db.add(BidSectionScoringItem(section_id=section_id, scoring_item_id=sid, sort_order=idx))
+    await db.commit()
+    return success(data={"section_id": section_id, "linked_count": len(new_ids)})
+
+
 @router.get("/projects/{project_id}/export-word", summary="导出 Word（旧路由，兼容保留）")
 @router.get("/projects/{project_id}/export", summary="导出 Word")
 async def export_word(
