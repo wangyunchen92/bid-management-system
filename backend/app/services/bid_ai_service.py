@@ -135,6 +135,32 @@ class BidAIService:
 
         return "\n".join(parts)
 
+    async def _get_scoring_items_for_section(self, db: AsyncSession, section_id: int) -> str:
+        """获取章节关联的评分项，格式化为 prompt 片段（链路 B v1）"""
+        from app.models.bid import BidScoringItem, BidSectionScoringItem
+        res = await db.execute(
+            select(BidScoringItem)
+            .join(BidSectionScoringItem, BidSectionScoringItem.scoring_item_id == BidScoringItem.id)
+            .where(BidSectionScoringItem.section_id == section_id, BidScoringItem.is_deleted == 0)
+            .order_by(BidSectionScoringItem.sort_order, BidScoringItem.sort_order)
+        )
+        items = res.scalars().all()
+        if not items:
+            return ""
+        lines = ["【关联评分项 — 这是拿分关键，请逐条响应】"]
+        total = 0
+        for it in items:
+            score_str = f"满分 {float(it.max_score)} 分" if it.max_score is not None else "分值未明"
+            if it.max_score is not None:
+                total += float(it.max_score)
+            lines.append(f"\n▶ {it.item_name}（{score_str}，类别：{it.category}）")
+            lines.append(f"  评分细则：{it.criteria}")
+            if it.required_evidence:
+                lines.append(f"  需要的证据：{it.required_evidence}")
+        if total > 0:
+            lines.insert(1, f"（本章节合计 {total} 分，请确保拿满）")
+        return "\n".join(lines)
+
     async def _get_other_sections_context(self, db: AsyncSession, project_id: int, current_section_id: int) -> str:
         """获取其他章节的标题和摘要，提供上下文"""
         result = await db.execute(
@@ -185,15 +211,17 @@ class BidAIService:
             tender_req = await self._get_tender_requirements(db, section.project_id)
         sections_ctx = await self._get_other_sections_context(db, section.project_id, section_id)
         knowledge_ref = await self._get_knowledge_reference(db, section.title)
+        scoring_block = await self._get_scoring_items_for_section(db, section_id)
 
         additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
         knowledge_part = f"\n{knowledge_ref}" if knowledge_ref else ""
+        scoring_part = f"\n{scoring_block}\n" if scoring_block else ""
 
         prompt = f"""你是一个专业的标书编写助手。请为以下标书章节撰写内容。
 
 标书项目：{project_title}
 当前章节：{section.title}
-
+{scoring_part}
 {sections_ctx}
 
 {tender_req}
@@ -203,13 +231,13 @@ class BidAIService:
 {additional_part}
 
 请撰写专业、详实的标书内容。要求：
-1. 内容要有针对性，紧扣招标要求
-2. 充分展示企业的资质和实力
-3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号
+1. 如有【关联评分项】，**逐条对照评分细则响应**（每条评分要素至少一段文字 + 引用一个企业素材作为佐证）
+2. 内容要有针对性，紧扣招标要求
+3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号——数据要具体（不要"丰富经验"，要"承接 X 个同类项目"）
 4. 如果知识库有相关参考模板，参考其结构和写法，但不要照搬
 5. 语言正式规范，符合投标文件要求
-6. 篇幅适中（500-2000字）
-7. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
+6. 输出 markdown，含小标题（## 子节）和列表
+7. 直接输出章节内容，不要加章节大标题（标题已有），不要带"以下是..."引导语"""
 
         client = self._get_client()
         response = client.chat.completions.create(
