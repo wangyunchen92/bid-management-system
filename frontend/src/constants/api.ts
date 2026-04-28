@@ -127,6 +127,9 @@ export const BID_API = {
   PROJECT_DETECT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect`,
   PROJECT_DETECT_REPORTS: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect/reports`,
   PROJECT_DETECT_REPORT_DETAIL: (projectId: number, reportId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect/reports/${reportId}`,
+  // 评分项（链路 B v1）
+  PROJECT_SCORING_ITEMS: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/scoring-items`,
+  SECTION_SCORING_ITEMS: (sectionId: number) => `${API_PREFIX}/bid/sections/${sectionId}/scoring-items`,
 } as const;
 
 export const TENDER_DOC_API = {

@@ -333,3 +333,32 @@ export function getDetectReports(projectId: number) {
 export function getDetectReportDetail(projectId: number, reportId: number) {
   return get<DetectReport>(BID_API.PROJECT_DETECT_REPORT_DETAIL(projectId, reportId));
 }
+
+// ── 评分项（链路 B v1）──────────────────────────────────
+
+export interface ScoringItem {
+  id: number;
+  category: string;
+  item_name: string;
+  max_score: number | null;
+  criteria: string;
+  required_evidence: string | null;
+  linked_chapter_hint?: string | null;
+  sort_order: number;
+  linked_section_ids?: number[];
+}
+
+export function getProjectScoringItems(projectId: number) {
+  return get<ScoringItem[]>(BID_API.PROJECT_SCORING_ITEMS(projectId));
+}
+
+export function getSectionScoringItems(sectionId: number) {
+  return get<ScoringItem[]>(BID_API.SECTION_SCORING_ITEMS(sectionId));
+}
+
+export function replaceSectionScoringItems(sectionId: number, scoringItemIds: number[]) {
+  return put<{ section_id: number; linked_count: number }>(
+    BID_API.SECTION_SCORING_ITEMS(sectionId),
+    { scoring_item_ids: scoringItemIds },
+  );
+}

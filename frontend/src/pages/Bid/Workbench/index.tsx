@@ -8,7 +8,7 @@ import type { TreeDataNode, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
-  FileSearchOutlined, RobotOutlined, SafetyCertificateOutlined, DownloadOutlined,
+  FileSearchOutlined, RobotOutlined, SafetyCertificateOutlined, DownloadOutlined, StarOutlined,
   CheckCircleFilled, WarningFilled, CloseCircleFilled,
   ThunderboltOutlined, EyeOutlined, DatabaseOutlined,
 } from '@ant-design/icons';
@@ -23,6 +23,8 @@ import { getUserList } from '@/services/system';
 import TenderDocParser from '@/components/TenderDocParser';
 import MarkdownContent from '@/components/MarkdownContent';
 import RichTextEditor from '@/components/RichTextEditor';
+import ScoringTablePanel from '@/components/ScoringTablePanel';
+import SectionScoringLink from '@/components/SectionScoringLink';
 import { LIBRARY_API } from '@/constants/api';
 
 const { Sider, Content } = Layout;
@@ -219,6 +221,7 @@ export default function BidWorkbenchPage() {
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingTree, setLoadingTree] = useState(false);
   const [parseDrawerOpen, setParseDrawerOpen] = useState(false);
+  const [scoringDrawerOpen, setScoringDrawerOpen] = useState(false);
 
   // 编辑器状态
   const [editTitle, setEditTitle] = useState('');
@@ -804,6 +807,13 @@ export default function BidWorkbenchPage() {
             文档预览
           </Button>
           <Button
+            icon={<StarOutlined />}
+            onClick={() => setScoringDrawerOpen(true)}
+            style={{ color: '#0d9488', borderColor: '#0d9488' }}
+          >
+            评分表
+          </Button>
+          <Button
             icon={<SafetyCertificateOutlined />}
             loading={detectLoading}
             onClick={handleDetect}
@@ -910,6 +920,13 @@ export default function BidWorkbenchPage() {
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 关联评分项面板（链路 B v1）*/}
+              {project?.id && selectedSection.id && (
+                <SectionScoringLink
+                  projectId={project.id}
+                  sectionId={selectedSection.id}
+                />
+              )}
               {/* 章节类型提示 */}
               {selectedSection.section_type && SECTION_TYPE_CONFIG[selectedSection.section_type] && (
                 <Alert
@@ -1137,6 +1154,22 @@ export default function BidWorkbenchPage() {
             if (flat.length > 0) setSelectedSection(flat[0]);
           }}
         />
+      </Drawer>
+
+      {/* 评分表 Drawer（链路 B v1）*/}
+      <Drawer
+        title={<Space><StarOutlined style={{ color: '#0d9488' }} />招标评分表</Space>}
+        placement="right"
+        width={760}
+        open={scoringDrawerOpen}
+        onClose={() => setScoringDrawerOpen(false)}
+      >
+        {project?.id && (
+          <ScoringTablePanel
+            projectId={project.id}
+            sections={flattenSections(sections).map((s) => ({ id: s.id, title: s.title }))}
+          />
+        )}
       </Drawer>
 
       {/* AI 生成 - 输入 Modal */}
