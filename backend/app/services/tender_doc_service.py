@@ -50,7 +50,61 @@ class TenderDocService:
 
         yield {"type": "uploading", "message": "保存文件..."}
 
-        # 2. 保存文件
+        # 2. 算 SHA256 用于复用判断
+        import hashlib
+        file_hash = hashlib.sha256(content).hexdigest()
+
+        # 2.1 命中已解析记录 → 跳过 OCR + AI，直接复制 parse_result
+        existing_result = await db.execute(
+            select(TenderDocument).where(
+                TenderDocument.file_hash == file_hash,
+                TenderDocument.parse_status == "COMPLETED",
+                TenderDocument.parse_result.isnot(None),
+                TenderDocument.is_deleted == 0,
+            ).order_by(TenderDocument.id.desc()).limit(1)
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            yield {"type": "reuse", "message": f"检测到已解析过相同文件（doc id={existing.id}），跳过 AI 解析直接复用"}
+            doc = TenderDocument(
+                project_id=project_id, tender_id=tender_id,
+                original_name=filename,
+                stored_path=existing.stored_path,  # 复用已存的物理文件
+                file_size=existing.file_size,
+                file_type=existing.file_type,
+                file_hash=file_hash,
+                page_count=existing.page_count,
+                parse_status="COMPLETED",
+                parse_result=existing.parse_result,
+                raw_text=existing.raw_text,
+                created_by=user_id, updated_by=user_id,
+            )
+            db.add(doc)
+            await db.flush()
+            await db.refresh(doc)
+            await db.commit()
+
+            # 仍走自动关联到 tender 的逻辑
+            try:
+                yield {"type": "linking", "message": "自动保存到招标信息..."}
+                link_result = await self.save_to_tender(db, doc.id, user_id)
+                await db.commit()
+                await db.refresh(doc)
+                yield {
+                    "type": "linked",
+                    "tender_id": link_result["tender_id"],
+                    "action": link_result["action"],
+                    "message": f"已{('更新' if link_result['action'] == 'updated' else '创建')}招标信息",
+                }
+            except Exception as e:
+                logger.warning(f"自动保存到招标信息失败: {e}")
+                yield {"type": "link_failed", "message": f"自动关联失败：{str(e)[:100]}"}
+
+            yield {"type": "done", "doc": self._doc_to_dict(doc),
+                   "timing": {"reused_from_doc_id": existing.id, "pipeline_total": 0}}
+            return
+
+        # 3. 保存文件
         file_id = str(uuid.uuid4())
         rel_dir = os.path.join("tender_docs", datetime.now().strftime("%Y%m"))
         abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
@@ -61,11 +115,12 @@ class TenderDocService:
         with open(abs_path, "wb") as f:
             f.write(content)
 
-        # 3. 创建数据库记录
+        # 4. 创建数据库记录
         doc = TenderDocument(
             project_id=project_id, tender_id=tender_id,
             original_name=filename, stored_path=stored_path,
             file_size=len(content), file_type=ext.lstrip("."),
+            file_hash=file_hash,
             parse_status="EXTRACTING",
             created_by=user_id, updated_by=user_id,
         )
@@ -201,7 +256,40 @@ class TenderDocService:
         if len(content) > MAX_FILE_SIZE:
             raise BusinessException(f"文件大小超过限制（最大 {MAX_FILE_SIZE // 1024 // 1024}MB）")
 
-        # 2. 保存文件
+        # 2. 算 hash 检查复用
+        import hashlib
+        file_hash = hashlib.sha256(content).hexdigest()
+        existing_result = await db.execute(
+            select(TenderDocument).where(
+                TenderDocument.file_hash == file_hash,
+                TenderDocument.parse_status == "COMPLETED",
+                TenderDocument.parse_result.isnot(None),
+                TenderDocument.is_deleted == 0,
+            ).order_by(TenderDocument.id.desc()).limit(1)
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            doc = TenderDocument(
+                project_id=project_id, tender_id=tender_id,
+                original_name=file.filename,
+                stored_path=existing.stored_path,
+                file_size=existing.file_size,
+                file_type=existing.file_type,
+                file_hash=file_hash,
+                page_count=existing.page_count,
+                parse_status="COMPLETED",
+                parse_result=existing.parse_result,
+                raw_text=existing.raw_text,
+                created_by=user_id, updated_by=user_id,
+            )
+            db.add(doc)
+            await db.flush()
+            await db.refresh(doc)
+            await db.commit()
+            logger.info(f"招标文件 hash {file_hash[:12]}... 命中已解析记录 id={existing.id}，跳过解析")
+            return doc
+
+        # 3. 保存文件
         file_id = str(uuid.uuid4())
         rel_dir = os.path.join("tender_docs", datetime.now().strftime("%Y%m"))
         abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
@@ -214,7 +302,7 @@ class TenderDocService:
         with open(abs_path, "wb") as f:
             f.write(content)
 
-        # 3. 创建数据库记录
+        # 4. 创建数据库记录
         doc = TenderDocument(
             project_id=project_id,
             tender_id=tender_id,
@@ -222,6 +310,7 @@ class TenderDocService:
             stored_path=stored_path,
             file_size=len(content),
             file_type=ext.lstrip("."),
+            file_hash=file_hash,
             parse_status="EXTRACTING",
             created_by=user_id,
             updated_by=user_id,

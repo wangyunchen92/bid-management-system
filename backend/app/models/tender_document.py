@@ -17,6 +17,8 @@ class TenderDocument(BaseModel):
     stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     file_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=True, index=True)
+    # SHA256 hex；命中相同 hash 的已解析文件时跳过 AI 解析、复用 parse_result
     page_count: Mapped[int] = mapped_column(Integer, nullable=True)
     parse_status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", server_default="PENDING")
     parse_result: Mapped[str] = mapped_column(Text, nullable=True)
