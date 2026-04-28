@@ -163,23 +163,28 @@ def _write_attachment(doc, stripped: str) -> bool:
 
 
 def _add_run_with_inline_format(paragraph, text: str, base_font='仿宋_GB2312', base_size=Pt(14)):
-    """解析行内 Markdown（**加粗**、*斜体*），添加 run 到段落"""
-    # 拆分 **bold** 和 *italic*
-    parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*)', text)
-    for part in parts:
-        if not part:
-            continue
-        if part.startswith('**') and part.endswith('**'):
-            run = paragraph.add_run(part[2:-2])
-            run.font.bold = True
-        elif part.startswith('*') and part.endswith('*') and not part.startswith('**'):
-            run = paragraph.add_run(part[1:-1])
-            run.font.italic = True
-        else:
-            run = paragraph.add_run(part)
-        run.font.name = base_font
-        run.font.size = base_size
-        run._element.rPr.rFonts.set(qn('w:eastAsia'), base_font)
+    """解析行内 Markdown（**加粗**、*斜体*、<br> 软换行），添加 run 到段落"""
+    # 先按 <br> 拆段，再对每段处理 markdown 加粗/斜体
+    segments = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
+    for seg_idx, segment in enumerate(segments):
+        if seg_idx > 0:
+            # 段间插入软换行（cell / paragraph 都适用）
+            paragraph.add_run().add_break()
+        parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*)', segment)
+        for part in parts:
+            if not part:
+                continue
+            if part.startswith('**') and part.endswith('**'):
+                run = paragraph.add_run(part[2:-2])
+                run.font.bold = True
+            elif part.startswith('*') and part.endswith('*') and not part.startswith('**'):
+                run = paragraph.add_run(part[1:-1])
+                run.font.italic = True
+            else:
+                run = paragraph.add_run(part)
+            run.font.name = base_font
+            run.font.size = base_size
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), base_font)
 
 
 def _write_md_table(doc, lines: list):
