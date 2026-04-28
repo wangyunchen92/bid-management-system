@@ -382,6 +382,9 @@ class BidFrameworkService:
             else:
                 content = ""
 
+            # 章节生成后按标题智能追加资料库附件
+            content = await self._inject_section_attachments(db, content, chapter["title"], section_type)
+
             section = BidSection(
                 project_id=project_id,
                 title=chapter["title"],
@@ -775,6 +778,93 @@ class BidFrameworkService:
 
         # 10. 清理连续空行
         content = re.sub(r'\n{3,}', '\n\n', content)
+
+        return content
+
+    async def _inject_section_attachments(self, db: AsyncSession, content: str, title: str, section_type: str) -> str:
+        """章节生成后按标题智能追加资料库附件（链路 A/B 共用）
+
+        根据章节标题关键词，从相关库表拉取所有有 file_path 的记录，
+        以「附：xxx」+「[附件:path:filename]」形式追加到 content 末尾。
+        如果库已经在 content 内联了同样的附件标记则跳过避免重复。
+        """
+        from app.models.library import PersonnelCert, Qualification, Achievement, Product
+
+        title = title or ""
+
+        # 章节关键词 → (查询函数, 附件分组标题)
+        async def query_personnel_id():
+            res = await db.execute(
+                select(PersonnelCert).where(
+                    PersonnelCert.is_deleted == 0,
+                    PersonnelCert.cert_type.in_(["身份证明", "身份证"]),
+                    PersonnelCert.file_path.isnot(None),
+                )
+            )
+            return [(p.person_name + " 身份证扫描件", p.file_path) for p in res.scalars().all()]
+
+        async def query_personnel_all():
+            res = await db.execute(
+                select(PersonnelCert).where(
+                    PersonnelCert.is_deleted == 0,
+                    PersonnelCert.file_path.isnot(None),
+                )
+            )
+            return [(f"{p.person_name} {p.cert_name}", p.file_path) for p in res.scalars().all()]
+
+        async def query_qualifications():
+            res = await db.execute(
+                select(Qualification).where(
+                    Qualification.is_deleted == 0,
+                    Qualification.file_path.isnot(None),
+                )
+            )
+            return [(q.cert_name, q.file_path) for q in res.scalars().all()]
+
+        async def query_achievements():
+            res = await db.execute(
+                select(Achievement).where(
+                    Achievement.is_deleted == 0,
+                    Achievement.file_path.isnot(None),
+                )
+            )
+            return [(a.project_name, a.file_path) for a in res.scalars().all()]
+
+        async def query_products():
+            res = await db.execute(
+                select(Product).where(
+                    Product.is_deleted == 0,
+                    Product.file_path.isnot(None),
+                )
+            )
+            return [(f"{p.name} {p.brand or ''} {p.model or ''}".strip(), p.file_path) for p in res.scalars().all()]
+
+        # 命中规则（按优先级，章节标题包含关键词即触发）
+        rules: list[tuple[list[str], str, callable]] = [
+            (["授权委托书", "授权书", "法定代表人身份证明", "身份证明书"], "法定代表人身份证扫描件", query_personnel_id),
+            (["业绩证明", "业绩材料", "业绩"], "业绩合同/中标通知附件", query_achievements),
+            (["人员配备", "项目团队", "项目组"], "项目人员证书附件", query_personnel_all),
+            (["设备配备", "设备清单", "投入设备"], "设备配置证明附件", query_products),
+            (["其他相关证明", "证明材料", "企业资质证明", "资质证书", "补充信息", "补充资料"],
+             "企业资质 / 营业执照等附件", query_qualifications),
+        ]
+
+        for keywords, label, query_fn in rules:
+            if not any(kw in title for kw in keywords):
+                continue
+            items = await query_fn()
+            if not items:
+                continue
+            # 过滤 content 已含的标记（避免重复注入）
+            new_items = [(name, path) for name, path in items if f"[附件:{path}:" not in content]
+            if not new_items:
+                continue
+            block_lines = [f"\n\n附：{label}\n"]
+            for name, path in new_items:
+                fname = path.split("/")[-1]
+                block_lines.append(f"[附件:{path}:{fname}]  {name}")
+            content = (content or "").rstrip() + "\n".join(block_lines)
+            break  # 一个章节匹配一条规则即止
 
         return content
 
