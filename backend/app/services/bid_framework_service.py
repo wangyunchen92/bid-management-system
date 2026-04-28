@@ -361,6 +361,7 @@ class BidFrameworkService:
         merged = self._merge_chapters_for_tender(ai_chapters)
 
         # 6. 批量创建 BidSection（链路 A 路由分发）
+        created_sections = []  # 用于步骤 7 的章节关联
         with_content = 0
         for i, chapter in enumerate(merged):
             section_type = chapter.get("section_type") or self._infer_type(chapter["title"])
@@ -394,6 +395,7 @@ class BidFrameworkService:
             )
             db.add(section)
             await db.flush()
+            created_sections.append(section)
 
             if content:
                 with_content += 1
@@ -405,8 +407,65 @@ class BidFrameworkService:
                 "has_content": bool(content),
             }
 
+        # 7. 落库评分项 + 自动关联章节（链路 B v1）
+        scoring_count, link_count = await self._persist_scoring_items(
+            db, project_id, parse_result, created_sections
+        )
+
         await db.commit()
-        yield {"type": "done", "total": len(merged), "with_content": with_content}
+        yield {
+            "type": "done",
+            "total": len(merged),
+            "with_content": with_content,
+            "scoring_items": scoring_count,
+            "scoring_links": link_count,
+        }
+
+    async def _persist_scoring_items(self, db: AsyncSession, project_id: int,
+                                      parse_result: dict, created_sections: list) -> tuple[int, int]:
+        """从 parse_result.scoring.details 落库 + 按 linked_chapter_hint 自动关联章节"""
+        from app.models.bid import BidScoringItem, BidSectionScoringItem
+
+        details = (parse_result.get("scoring") or {}).get("details") or []
+        if not details:
+            return 0, 0
+
+        sections_by_title = {s.title: s for s in created_sections}
+        scoring_count = 0
+        link_count = 0
+
+        for sort_idx, item in enumerate(details):
+            if not isinstance(item, dict) or not item.get("item"):
+                continue
+            scoring = BidScoringItem(
+                project_id=project_id,
+                category=(item.get("category") or "技术").strip()[:20],
+                item_name=item.get("item", "")[:200],
+                max_score=item.get("max_score"),
+                criteria=item.get("criteria") or "",
+                required_evidence=item.get("required_evidence") or None,
+                linked_chapter_hint=(item.get("linked_chapter_hint") or "").strip()[:200] or None,
+                sort_order=sort_idx,
+            )
+            db.add(scoring)
+            await db.flush()
+            scoring_count += 1
+
+            # 自动关联：linked_chapter_hint 包含/被包含 章节 title
+            hint = scoring.linked_chapter_hint
+            if hint:
+                for title, section in sections_by_title.items():
+                    if hint in title or title in hint:
+                        db.add(BidSectionScoringItem(
+                            section_id=section.id,
+                            scoring_item_id=scoring.id,
+                            sort_order=0,
+                        ))
+                        link_count += 1
+                        break
+
+        await db.flush()
+        return scoring_count, link_count
 
     def _merge_chapters_for_tender(self, ai_chapters: list) -> list:
         """合并 AI 抽取的章节 + ESSENTIAL_FALLBACK 必备补充 + 补充信息章节。

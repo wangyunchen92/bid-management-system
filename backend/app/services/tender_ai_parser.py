@@ -50,7 +50,14 @@ TENDER_PARSE_PROMPT = """你是一个专业的招标文件解析助手。请从�
     "commercial_score": null,
     "price_score": null,
     "details": [
-      {"category": "技术/商务/价格", "item": "评分项名称", "max_score": null, "criteria": "评分标准"}
+      {
+        "category": "技术/商务/价格",
+        "item": "评分项名称（如：供应商业绩、服务方案完整性、人员配备）",
+        "max_score": null,
+        "criteria": "评分标准原文，保留'每提供 X 得 Y 分，满分 Z 分'这类细节",
+        "required_evidence": "需要提供什么材料才能拿到这个分（如：合同扫描件 + 业主评价、设备购置发票、人员证书等）；找不到则留空字符串",
+        "linked_chapter_hint": "最适合放在标书的哪个章节（章节标题，如：业绩证明材料、人员配备、整体服务方案、售后服务方案）；找不到留空"
+      }
     ]
   },
   "bid_document_requirements": {
