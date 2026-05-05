@@ -4,7 +4,7 @@ import {
   Layout, Tree, Button, Select, Input, Space, Tag, Typography,
   Modal, Form, TreeSelect, InputNumber, Empty, Spin,
   Tooltip, Dropdown, Card, Drawer, Progress, List, Alert, App, Tabs, Segmented } from 'antd';
-import type { TreeDataNode, MenuProps } from 'antd';
+import type { TreeDataNode, TreeProps, MenuProps } from 'antd';
 import {
   PlusOutlined, SaveOutlined, ArrowLeftOutlined,
   MoreOutlined, EditOutlined, DeleteOutlined, PlusCircleOutlined,
@@ -13,7 +13,7 @@ import {
   ThunderboltOutlined, EyeOutlined, DatabaseOutlined,
 } from '@ant-design/icons';
 import {
-  getBidProject, getSectionTree, createSection, updateSection, deleteSection,
+  getBidProject, getSectionTree, createSection, updateSection, deleteSection, reorderSections,
   aiGenerateSectionStream, exportBidWord, generateBidFramework, batchAiGenerate,
   previewBidDocument, fillLibrarySections,
   runBidDetection, getDetectReports, getDetectReportDetail,
@@ -83,6 +83,70 @@ function flattenSections(sections: BidSection[]): BidSection[] {
   };
   walk(sections);
   return result;
+}
+
+// ── 工具函数：拖拽后重排 sections 树 ───────────────────────────
+function applyDrop(
+  sections: BidSection[],
+  dragKey: number,
+  dropKey: number,
+  dropPosition: number,        // -1: 拖到 dropKey 之前；1: 之后；0: 内部
+  dropToGap: boolean,          // 是否拖到节点之间的间隙
+): BidSection[] {
+  const data = JSON.parse(JSON.stringify(sections)) as BidSection[];
+
+  // 1. 找到并移除 drag 节点
+  let dragNode: BidSection | null = null;
+  const remove = (list: BidSection[]): boolean => {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === dragKey) {
+        dragNode = list[i];
+        list.splice(i, 1);
+        return true;
+      }
+      if (list[i].children?.length && remove(list[i].children!)) return true;
+    }
+    return false;
+  };
+  remove(data);
+  if (!dragNode) return sections;
+
+  // 2. 插入到目标位置
+  const insert = (list: BidSection[]): boolean => {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === dropKey) {
+        if (!dropToGap) {
+          // 拖到节点内部，作为第一个子节点
+          list[i].children = list[i].children || [];
+          list[i].children!.unshift(dragNode!);
+        } else if (dropPosition === -1) {
+          list.splice(i, 0, dragNode!);
+        } else {
+          list.splice(i + 1, 0, dragNode!);
+        }
+        return true;
+      }
+      if (list[i].children?.length && insert(list[i].children!)) return true;
+    }
+    return false;
+  };
+  insert(data);
+  return data;
+}
+
+// ── 工具函数：树转 reorder 提交项 ──────────────────────────────
+function treeToReorderItems(
+  sections: BidSection[],
+): { id: number; parent_id: number | null; sort_order: number }[] {
+  const items: { id: number; parent_id: number | null; sort_order: number }[] = [];
+  const walk = (list: BidSection[], parentId: number | null) => {
+    list.forEach((s, idx) => {
+      items.push({ id: s.id, parent_id: parentId, sort_order: idx });
+      if (s.children?.length) walk(s.children, s.id);
+    });
+  };
+  walk(sections, null);
+  return items;
 }
 
 // ── AddSectionModal 组件 ──────────────────────────────────────
@@ -393,6 +457,24 @@ export default function BidWorkbenchPage() {
       await loadSections();
     } catch {
       message.error('删除失败');
+    }
+  };
+
+  // 章节树拖拽
+  const handleTreeDrop: TreeProps['onDrop'] = async (info) => {
+    const dragKey = Number(info.dragNode.key);
+    const dropKey = Number(info.node.key);
+    const dropPos = info.node.pos.split('-');
+    const dropPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
+    // dropToGap = false 表示拖到节点上（成为子节点），true 表示拖到节点之间
+
+    const newSections = applyDrop(sections, dragKey, dropKey, dropPosition, info.dropToGap);
+    setSections(newSections);  // 乐观更新
+    try {
+      await reorderSections(projectId, treeToReorderItems(newSections));
+    } catch (err: any) {
+      message.error('章节移动失败');
+      await loadSections();
     }
   };
 
@@ -900,7 +982,11 @@ export default function BidWorkbenchPage() {
               selectedKeys={selectedSection ? [selectedSection.id] : []}
               onSelect={handleSelectNode}
               blockNode
+              draggable={{ icon: false }}
+              onDrop={handleTreeDrop}
+              titleRender={renderTreeTitle}
               style={{ background: 'transparent' }}
+              className="bid-tree"
             />
           )}
         </Sider>

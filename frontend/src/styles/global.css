@@ -118,6 +118,14 @@ body {
   border-radius: var(--radius-card) !important;
 }
 
+/* ── 标书章节树（拖拽视觉提示）─────────────────────── */
+.bid-tree .ant-tree-treenode-draggable {
+  cursor: grab;
+}
+.bid-tree .ant-tree-treenode-draggable:active {
+  cursor: grabbing;
+}
+
 /* ── TipTap 富文本编辑器 ─────────────────────────────── */
 .tiptap-wrapper .ProseMirror {
   outline: none;

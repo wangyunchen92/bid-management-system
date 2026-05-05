@@ -50,8 +50,8 @@ export function deleteSection(id: number) {
   return del(BID_API.SECTION_DELETE(id));
 }
 
-export function reorderSections(projectId: number, items: { id: number; sort_order: number; parent_id?: number }[]) {
-  return post<null>(BID_API.SECTION_REORDER(projectId), { items });
+export function reorderSections(projectId: number, items: { id: number; sort_order: number; parent_id?: number | null }[]) {
+  return put<BidSection[]>(BID_API.SECTION_REORDER(projectId), { items });
 }
 
 export function aiGenerateSection(sectionId: number, data: { tender_requirements?: string; additional_context?: string }) {

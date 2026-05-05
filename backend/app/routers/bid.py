@@ -116,7 +116,7 @@ async def reorder_sections(
     db: AsyncSession = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    result = await bid_service.reorder_sections(db, project_id, data.section_ids, user_id)
+    result = await bid_service.reorder_sections(db, project_id, data.items, user_id)
     return success(data=result, message="排序更新成功")
 
 

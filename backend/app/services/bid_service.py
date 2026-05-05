@@ -253,26 +253,35 @@ class BidService:
             child.is_deleted = 1
             child.updated_by = user_id
 
-    async def reorder_sections(self, db: AsyncSession, project_id: int, section_ids: List[int], user_id: int) -> list:
-        # 验证项目存在
+    async def reorder_sections(self, db: AsyncSession, project_id: int, items: list, user_id: int) -> list:
+        """批量更新章节的 parent_id + sort_order。
+
+        items: [{id: int, parent_id: Optional[int], sort_order: int}]
+        """
         proj_result = await db.execute(
             select(BidProject).where(BidProject.id == project_id, BidProject.is_deleted == 0)
         )
         if proj_result.scalar_one_or_none() is None:
             raise NotFoundException("标书项目不存在")
 
-        for order, section_id in enumerate(section_ids):
+        for item in items:
+            sid = item.id if hasattr(item, "id") else item["id"]
+            new_parent = item.parent_id if hasattr(item, "parent_id") else item.get("parent_id")
+            new_order = item.sort_order if hasattr(item, "sort_order") else item.get("sort_order", 0)
+
             result = await db.execute(
                 select(BidSection).where(
-                    BidSection.id == section_id,
+                    BidSection.id == sid,
                     BidSection.project_id == project_id,
                     BidSection.is_deleted == 0,
                 )
             )
             section = result.scalar_one_or_none()
-            if section:
-                section.sort_order = order
-                section.updated_by = user_id
+            if section is None:
+                continue
+            section.parent_id = new_parent
+            section.sort_order = new_order
+            section.updated_by = user_id
 
         await db.flush()
         return await self.get_section_tree(db, project_id)

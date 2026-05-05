@@ -95,8 +95,14 @@ class BidSectionResponse(BaseModel):
 BidSectionResponse.model_rebuild()
 
 
+class ReorderItem(BaseModel):
+    id: int
+    parent_id: Optional[int] = None  # null 表示根节点
+    sort_order: int = 0
+
+
 class ReorderSectionsRequest(BaseModel):
-    section_ids: List[int] = Field(...)
+    items: List[ReorderItem] = Field(...)
 
 
 # ========== AI 功能 ==========
