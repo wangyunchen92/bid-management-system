@@ -30,22 +30,38 @@ class BidAIService:
         return self.client
 
     async def _get_company_info(self, db: AsyncSession) -> str:
-        """获取企业资料库摘要，作为 AI 上下文"""
+        """获取企业资料库摘要，作为 AI 上下文。
+
+        策略：业绩按完成时间倒序最多 30 条；资质/人员/设备按 id 全部拉（一般 < 50 条）。
+        AI 看到完整素材才能从中挑选最相关的引用。
+        """
         parts = []
 
-        # 资质证书
-        result = await db.execute(select(Qualification).where(Qualification.is_deleted == 0).limit(20))
+        # 资质证书（全部拿，按 id）
+        result = await db.execute(
+            select(Qualification).where(Qualification.is_deleted == 0)
+            .order_by(Qualification.id).limit(50)
+        )
         quals = result.scalars().all()
         if quals:
-            parts.append("【企业资质】")
+            parts.append(f"【企业资质】（共 {len(quals)} 条）")
             for q in quals:
                 parts.append(f"- {q.cert_name}（{q.cert_type or ''}，编号：{q.cert_no or ''}）")
 
-        # 业绩案例（含描述和完成时间）
-        result = await db.execute(select(Achievement).where(Achievement.is_deleted == 0).limit(10))
+        # 业绩案例：按完成时间倒序（NULL 排在最后），最多 30 条
+        from sqlalchemy import case as sa_case
+        result = await db.execute(
+            select(Achievement).where(Achievement.is_deleted == 0)
+            .order_by(
+                sa_case((Achievement.completion_date.is_(None), 1), else_=0),
+                Achievement.completion_date.desc(),
+                Achievement.id.desc(),
+            )
+            .limit(30)
+        )
         achvs = result.scalars().all()
         if achvs:
-            parts.append("\n【业绩案例】")
+            parts.append(f"\n【业绩案例】（共 {len(achvs)} 条，按完成时间倒序）")
             for a in achvs:
                 amount = f"，合同金额{float(a.contract_amount)}万元" if a.contract_amount else ""
                 date = f"，完成时间{a.completion_date.strftime('%Y年%m月') if a.completion_date else ''}" if a.completion_date else ""
@@ -54,18 +70,24 @@ class BidAIService:
                 parts.append(f"- {a.project_name}（甲方：{a.client_name or ''}{amount}{date}{desc}{has_proof}）")
 
         # 人员证书
-        result = await db.execute(select(PersonnelCert).where(PersonnelCert.is_deleted == 0).limit(20))
+        result = await db.execute(
+            select(PersonnelCert).where(PersonnelCert.is_deleted == 0)
+            .order_by(PersonnelCert.id).limit(50)
+        )
         certs = result.scalars().all()
         if certs:
-            parts.append("\n【人员证书】")
+            parts.append(f"\n【人员证书】（共 {len(certs)} 条）")
             for c in certs:
                 parts.append(f"- {c.person_name}：{c.cert_name}（{c.cert_no or ''}）")
 
         # 产品/设备
-        result = await db.execute(select(Product).where(Product.is_deleted == 0).limit(10))
+        result = await db.execute(
+            select(Product).where(Product.is_deleted == 0)
+            .order_by(Product.id).limit(30)
+        )
         prods = result.scalars().all()
         if prods:
-            parts.append("\n【产品/设备】")
+            parts.append(f"\n【产品/设备】（共 {len(prods)} 条）")
             for p in prods:
                 parts.append(f"- {p.name}（{p.brand or ''} {p.model or ''}，数量：{p.quantity}）")
 
