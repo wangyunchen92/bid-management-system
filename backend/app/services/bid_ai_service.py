@@ -100,23 +100,54 @@ class BidAIService:
 
         return ""
 
-    async def _get_knowledge_reference(self, db: AsyncSession, section_title: str) -> str:
-        """从知识库搜索与当前章节相关的模板，作为参考"""
-        from sqlalchemy import or_
+    # 章节标题 → 库匹配关键词（长词拆短词，提高 tags 命中率）
+    # 顺序敏感：长/具体的关键词靠前，避免"服务方案"先吃掉"售后服务方案"
+    SECTION_TITLE_KEYWORDS = [
+        (("售后服务",),                                ["售后服务"]),
+        (("应急预案", "紧急订单"),                       ["应急预案", "应急响应"]),
+        (("安全生产", "安全方案", "安全管理", "安全措施"), ["安全生产", "安全管理", "消防"]),
+        (("印刷工艺", "色彩管理", "工艺方案"),            ["印刷工艺", "色彩管理", "打样"]),
+        (("质量控制", "质量保证", "质量管理"),            ["质量控制", "质量管理"]),
+        (("项目实施", "进度计划", "实施计划"),            ["进度计划", "实施计划"]),
+        (("包装运输", "包装", "运输", "配送"),            ["包装", "运输", "配送"]),
+        (("保密措施", "保密管理"),                       ["保密"]),
+        (("绿色印刷", "环保", "节能"),                   ["绿色印刷", "环保", "节能"]),
+        (("人员配备", "项目团队"),                      ["人员配备", "团队"]),
+        (("设备配备", "投入设备"),                      ["设备配备"]),
+        (("整体服务方案", "服务方案", "服务承诺"),         ["服务方案", "整体服务", "服务承诺"]),
+    ]
 
-        # 用章节标题关键词搜索知识库
-        keywords = [w for w in section_title.replace('第', '').replace('章', '').replace('节', '').split() if len(w) > 1]
+    def _section_title_to_query_keywords(self, title: str) -> list[str]:
+        """把章节标题映射到库查询关键词集"""
+        title = (title or "").strip()
+        if not title:
+            return []
+        for triggers, kws in self.SECTION_TITLE_KEYWORDS:
+            if any(t in title for t in triggers):
+                return kws
+        # fallback：按 2 字滑窗切，长度 ≥ 2 的中文短语
+        if len(title) <= 4:
+            return [title]
+        return [title[:2], title[2:4], title]
+
+    async def _get_knowledge_reference(self, db: AsyncSession, section_title: str) -> str:
+        """从知识库搜索与当前章节相关的样本/模板，作为 few-shot 参考"""
+        from sqlalchemy import or_, case
+
+        keywords = self._section_title_to_query_keywords(section_title)
         if not keywords:
-            keywords = [section_title]
+            return ""
 
         query = select(KnowledgeTemplate).where(KnowledgeTemplate.is_deleted == 0)
         conditions = []
-        for kw in keywords[:3]:  # 最多3个关键词
+        for kw in keywords[:3]:
             conditions.append(KnowledgeTemplate.title.contains(kw))
             conditions.append(KnowledgeTemplate.tags.contains(kw))
         if conditions:
             query = query.where(or_(*conditions))
-        query = query.order_by(KnowledgeTemplate.usage_count.desc()).limit(3)
+        # REFERENCE（真实投标参考）优先于其他类
+        ref_priority = case((KnowledgeTemplate.category == 'REFERENCE', 0), else_=1)
+        query = query.order_by(ref_priority, KnowledgeTemplate.usage_count.desc()).limit(2)
 
         result = await db.execute(query)
         templates = result.scalars().all()
@@ -124,14 +155,15 @@ class BidAIService:
         if not templates:
             return ""
 
-        parts = ["【知识库参考模板】"]
+        parts = ["【行业写作风格参考 — 模仿密度和具体度，不要照抄文字】"]
         for t in templates:
-            # 截取前500字作为参考
-            content_preview = t.content[:500] if t.content else ""
-            parts.append(f"\n--- 模板：{t.title} ---")
+            # REFERENCE 取 1500 字，模板类取 600 字
+            limit = 1500 if t.category == 'REFERENCE' else 600
+            content_preview = (t.content or "")[:limit]
+            parts.append(f"\n--- 参考：{t.title} ---")
             parts.append(content_preview)
-            if t.content and len(t.content) > 500:
-                parts.append("...(已截取前500字)")
+            if t.content and len(t.content) > limit:
+                parts.append(f"...（截取前 {limit} 字）")
 
         return "\n".join(parts)
 
@@ -230,14 +262,29 @@ class BidAIService:
 {knowledge_part}
 {additional_part}
 
-请撰写专业、详实的标书内容。要求：
-1. 如有【关联评分项】，**逐条对照评分细则响应**（每条评分要素至少一段文字 + 引用一个企业素材作为佐证）
-2. 内容要有针对性，紧扣招标要求
-3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号——数据要具体（不要"丰富经验"，要"承接 X 个同类项目"）
-4. 如果知识库有相关参考模板，参考其结构和写法，但不要照搬
-5. 语言正式规范，符合投标文件要求
-6. 输出 markdown，含小标题（## 子节）和列表
-7. 直接输出章节内容，不要加章节大标题（标题已有），不要带"以下是..."引导语"""
+请撰写专业、详实的标书内容。**硬性要求**：
+
+1. **量化指标密度**（拿分关键）：必须包含**至少 8 处**带数字+单位的具体指标，例如：
+   - 工艺：「印刷误差 ≤0.2mm」「正反面套印误差 ≤0.5mm」「网点面积 5%」「BL100% 黑色油墨」「实地密度 1.10±0.1」「文字准确率 100%」
+   - 时间：「7×24 小时」「1 小时现场响应」「48 小时内研判」「30 分钟内启动整改」「20% 时间压缩」
+   - 环境：「温度 22-25℃」「湿度 ≤60%」「卡板间距 10cm」「堆放高度 ≤1.5m」
+   - **严禁**「较高质量」「丰富经验」「完善的体系」「一定的能力」这类形容词
+
+2. **行业术语**：必须用印刷行业的专业术语（晒版、出片、套印、水墨平衡、网点面积、油墨密度、烫银、哑膜、覆膜、锁线、模切、卡板、围膜、瓦楞纸、包心折、CMYK 四色、电化铝等），让评标专家一眼看出是行内人写的
+
+3. **三级层次**：用 markdown
+   - `## 1. 一级主题` → `### 1.1 二级主题` → `（1）（2）（3）` 编号清单
+   - 不允许大段连续平铺超过 200 字
+
+4. **逐条响应评分细则**：如有【关联评分项】，每条评分要素都要有对应段落直接对应「响应：xxx」
+
+5. **引用企业素材**：从【企业资料库】挑相关业绩/人员/资质，按"项目名（甲方+金额+年份）"格式具体引用，不写"曾承接多个项目"
+
+6. **模仿参考样本风格**：如有【行业写作风格参考】，模仿其用词密度、数字密度、结构层级——但不能照抄文字，要重新组织
+
+7. **篇幅**：1500-3500 字（评分高的章节往 3000 字写）
+
+8. **输出格式**：直接输出章节内容（标题已有，不要重复），不要带"以下是..."引导语，markdown 格式"""
 
         client = self._get_client()
         response = client.chat.completions.create(
