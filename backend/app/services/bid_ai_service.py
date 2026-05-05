@@ -329,9 +329,18 @@ class BidAIService:
         additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
         knowledge_part = f"\n{knowledge_ref}" if knowledge_ref else ""
         scoring_part = f"\n{scoring_block}\n" if scoring_block else ""
+        # 把 checklist 转成填空骨架：AI 看到的是模板而不是要求
         checklist_part = ""
         if checklist:
-            checklist_part = "\n【本章节必写子主题清单（每条都必须独立成节展开 300-600 字，不允许合并跳过）】\n" + "\n".join(checklist) + "\n"
+            skeleton_lines = ["\n【本章节输出模板（必须严格按此骨架填空，所有 ## 一级标题缺一不可、不可合并、不可改名）】\n"]
+            for item in checklist:
+                # 每条 checklist 已经形如「一、子主题名（提示）」
+                title_part = item.split("（")[0].strip()
+                hint_part = "（" + item.split("（", 1)[1] if "（" in item else ""
+                skeleton_lines.append(f"\n## {title_part}\n{hint_part}\n（在此展开 350-500 字：用 ### 1.1 / ### 1.2 拆分二级要点，每个 ### 下用（1）（2）（3）至少 3 个编号项，含 2 处以上量化指标和行业术语）\n")
+            skeleton_lines.append(f"\n本章节合计 {len(checklist)} 个 ## 标题，必须**全部展开**，总字数 ≥2500（10 项时 ≥3500）。")
+            skeleton_lines.append("\n警告：如果你只写了部分 ## 标题，会被判定为低质量作品。请逐条按骨架填空。")
+            checklist_part = "\n".join(skeleton_lines) + "\n"
 
         prompt = f"""你是一个专业的标书编写助手。请为以下标书章节撰写内容。
 
@@ -372,17 +381,26 @@ class BidAIService:
 
 8. **篇幅**：**严格 ≥2500 字**（如有子主题清单 ≥3000 字）。AI 不允许提前结束，未达字数的章节会被打回重写。
 
-9. **输出**：直接输出章节正文 markdown（章节大标题已有，不要重复），不带"以下是..."引导语。"""
+9. **输出**：直接输出章节正文 markdown（章节大标题已有，不要重复），不带"以下是..."引导语。
+
+⚠️ **反偷懒检测**：如果上方有【本章节输出模板】，你的输出**必须严格按骨架的所有 ## 一级标题逐个填写**：
+- 不允许跳过任何 ## 标题（把 10 个变成 5 个 = 不合格）
+- 不允许合并多个 ## 为一个（"一、A 和 B" = 不合格）
+- 不允许只写到一半提前结束（写到 "## 五" 就不写 "## 六/七/八/九/十" = 不合格）
+- 写完一个 ## 立刻继续下一个 ##，不要写"以上是xxx，下面继续"这种过渡语
+- 必须用 markdown 三级层次：## → ### → （1）（2）（3）
+
+写完后自检：你输出的 ## 数量是否等于模板要求的数量？字数是否 ≥2500？如不达标，请继续补全后再输出。"""
 
         client = self._get_client()
         response = client.chat.completions.create(
             model=settings.AI_MODEL,
             messages=[
-                {"role": "system", "content": "你是一个经验丰富的标书编写专家，擅长根据招标要求和企业资料撰写高质量的投标文件内容。"},
+                {"role": "system", "content": "你是一个标书编写专家。当用户给出【输出模板骨架】时，你**必须**按骨架的所有 ## 一级标题逐条填写，不允许偷懒、跳过、合并标题或提前结束。每节都要写满 350+ 字，含具体工艺数字、行业术语和企业资料引用。整篇内容 ≥2500 字（如骨架有 10 项则 ≥3500 字）。优先保证完整性而非简洁性。"},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=8192,
-            temperature=0.7,
+            temperature=0.4,
         )
 
         return response.choices[0].message.content.strip()
@@ -444,11 +462,11 @@ class BidAIService:
         stream = client.chat.completions.create(
             model=settings.AI_MODEL,
             messages=[
-                {"role": "system", "content": "你是一个经验丰富的标书编写专家，擅长根据招标要求和企业资料撰写高质量的投标文件内容。"},
+                {"role": "system", "content": "你是一个标书编写专家。当用户给出【输出模板骨架】时，你**必须**按骨架的所有 ## 一级标题逐条填写，不允许偷懒、跳过、合并标题或提前结束。每节都要写满 350+ 字，含具体工艺数字、行业术语和企业资料引用。整篇内容 ≥2500 字（如骨架有 10 项则 ≥3500 字）。优先保证完整性而非简洁性。"},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=8192,
-            temperature=0.7,
+            temperature=0.4,
             stream=True,
         )
 
