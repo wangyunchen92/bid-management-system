@@ -234,7 +234,48 @@ class BidAIService:
         return [title[:2], title[2:4], title]
 
     async def _get_knowledge_reference(self, db: AsyncSession, section_title: str) -> str:
-        """从知识库搜索与当前章节相关的样本/模板，作为 few-shot 参考"""
+        """从知识库搜索与当前章节相关的样本/模板，作为 few-shot 参考。
+
+        优先走 RAG 路径（语义检索 reference_embeddings.pkl）；
+        如果索引未加载或检索失败，自动降级到关键词匹配。
+        """
+        # 路径 A: RAG 语义检索（首选）
+        try:
+            from app.services.embedding_service import embedding_service
+            if embedding_service.is_loaded():
+                rag_text = self._format_rag_reference_via_search(section_title, embedding_service)
+                if rag_text:
+                    return rag_text
+        except Exception as e:
+            logger.warning(f"[RAG] 检索失败，回退到关键词匹配: {e}")
+
+        # 路径 B: 关键词 fallback
+        return await self._keyword_reference_fallback(db, section_title)
+
+    def _format_rag_reference_via_search(self, section_title: str, emb_svc) -> str:
+        """语义检索 top-K 段并格式化为 prompt 片段。
+
+        min_sim=0.45：vision 模型对纯文本的余弦相似度整体比专用文本 embedding 偏低，
+        实测 0.45 是合理截断点（高于此一般是真相关，低于此噪音多）。
+        """
+        results = emb_svc.search(section_title, top_k=6, min_sim=0.45)
+        if not results:
+            return ""
+        parts = ["【行业写作风格参考 — 模仿密度和具体度，不要照抄文字】"]
+        for sim, meta, text in results:
+            limit = 800
+            preview = (text or "")[:limit]
+            title = meta.get("title") or "(无标题)"
+            source = meta.get("source") or ""
+            parts.append(f"\n--- 参考：{title} （来源：{source}，相似度 {sim:.2f}）---")
+            parts.append(preview)
+            if text and len(text) > limit:
+                parts.append(f"...（截取前 {limit} 字）")
+        parts.append(f"\n（共 {len(results)} 段，按语义相关性排序）")
+        return "\n".join(parts)
+
+    async def _keyword_reference_fallback(self, db: AsyncSession, section_title: str) -> str:
+        """关键词匹配 fallback（原 _get_knowledge_reference 实现）"""
         from sqlalchemy import or_, case
 
         keywords = self._section_title_to_query_keywords(section_title)
@@ -248,26 +289,21 @@ class BidAIService:
             conditions.append(KnowledgeTemplate.tags.contains(kw))
         if conditions:
             query = query.where(or_(*conditions))
-        # REFERENCE（真实投标参考）优先于其他类
         ref_priority = case((KnowledgeTemplate.category == 'REFERENCE', 0), else_=1)
         query = query.order_by(ref_priority, KnowledgeTemplate.usage_count.desc()).limit(2)
 
         result = await db.execute(query)
         templates = result.scalars().all()
-
         if not templates:
             return ""
-
         parts = ["【行业写作风格参考 — 模仿密度和具体度，不要照抄文字】"]
         for t in templates:
-            # REFERENCE 取 1500 字，模板类取 600 字
             limit = 1500 if t.category == 'REFERENCE' else 600
             content_preview = (t.content or "")[:limit]
             parts.append(f"\n--- 参考：{t.title} ---")
             parts.append(content_preview)
             if t.content and len(t.content) > limit:
                 parts.append(f"...（截取前 {limit} 字）")
-
         return "\n".join(parts)
 
     async def _get_scoring_items_for_section(self, db: AsyncSession, section_id: int) -> str:
