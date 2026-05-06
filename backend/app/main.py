@@ -32,6 +32,15 @@ async def lifespan(app: FastAPI):
     logger.info("应用启动中...")
     await init_db()
     await _init_base_data()
+    # 预加载 RAG 知识库索引（reference_embeddings.pkl）
+    try:
+        from app.services.embedding_service import embedding_service
+        from pathlib import Path
+        idx_path = Path(__file__).resolve().parent.parent / "data" / "reference_embeddings.pkl"
+        loaded = embedding_service.load_index(str(idx_path))
+        logger.info(f"RAG 索引加载: {'✓ 成功' if loaded else '✗ 未加载，将走关键词 fallback'}")
+    except Exception as e:
+        logger.warning(f"RAG 索引加载异常（不影响主流程）: {e}")
     yield
     await close_db()
     logger.info("应用已关闭")

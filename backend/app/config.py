@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     AI_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
     AI_MODEL: str = "doubao-seed-1-8-251228"
     AI_VISION_MODEL: str = "doubao-seed-1-8-251228"  # 视觉模型，用于扫描件/图片识别
+    AI_EMBEDDING_MODEL: str = "ep-20260506223937-rn9jb"  # Doubao-embedding-vision 接入点（多模态向量，纯文本也走 multimodal API），用于 RAG 语义检索
 
     # 企业信息配置
     COMPANY_NAME: str = "合肥新安彩印包装有限公司"
