@@ -416,12 +416,17 @@ async def ai_generate_section_stream(
     """SSE 流式生成，前端实时接收文本片段"""
     async def event_generator():
         try:
-            async for chunk in bid_ai_service.generate_section_content_stream(
+            async for evt in bid_ai_service.generate_section_content_stream(
                 db, section_id,
                 tender_requirements=data.tender_requirements,
                 additional_context=data.additional_context,
             ):
-                yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                # service 现在 yield dict（含 content/progress/section_done），
+                # 但兼容旧接口的 str（视为 content）
+                if isinstance(evt, dict):
+                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': evt}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"

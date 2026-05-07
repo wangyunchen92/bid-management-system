@@ -470,7 +470,16 @@ class BidAIService:
         tender_requirements: Optional[str] = None,
         additional_context: Optional[str] = None,
     ):
-        """流式生成章节内容，yield 每个文本片段"""
+        """流式生成章节内容。
+
+        Yield 类型：
+          - dict {"content": "..."}        实时文本片段
+          - dict {"progress": {...}}        多轮模式专用，节切换提示
+          - dict {"section_done": {...}}    多轮模式专用，单节完成
+          - str（向后兼容）                 视为 content（router 自动包装）
+
+        路由：章节有 SECTION_CHECKLIST 且 ≥ 3 项 → 多轮生成；否则单轮 fallback。
+        """
         section_result = await db.execute(
             select(BidSection).where(BidSection.id == section_id, BidSection.is_deleted == 0)
         )
@@ -478,6 +487,30 @@ class BidAIService:
         if not section:
             raise Exception("章节不存在")
 
+        checklist = self._section_title_to_checklist(section.title)
+        if checklist and len(checklist) >= 3:
+            logger.info(f"[多轮生成] section={section_id} 「{section.title}」 子主题 {len(checklist)} 项")
+            async for event in self._multi_turn_section_stream(
+                db, section, checklist,
+                tender_requirements=tender_requirements,
+                additional_context=additional_context,
+            ):
+                yield event
+        else:
+            async for event in self._single_turn_section_stream(
+                db, section,
+                tender_requirements=tender_requirements,
+                additional_context=additional_context,
+            ):
+                yield event
+
+    # ── 单轮生成（回退路径，无 checklist 时用）────────────────
+
+    async def _single_turn_section_stream(
+        self, db: AsyncSession, section, *,
+        tender_requirements: Optional[str] = None,
+        additional_context: Optional[str] = None,
+    ):
         project_result = await db.execute(
             select(BidProject).where(BidProject.id == section.project_id, BidProject.is_deleted == 0)
         )
@@ -489,7 +522,7 @@ class BidAIService:
             tender_req = f"【招标要求】\n{tender_requirements}"
         else:
             tender_req = await self._get_tender_requirements(db, section.project_id)
-        sections_ctx = await self._get_other_sections_context(db, section.project_id, section_id)
+        sections_ctx = await self._get_other_sections_context(db, section.project_id, section.id)
         knowledge_ref = await self._get_knowledge_reference(db, section.title)
         additional_part = f"\n额外要求：\n{additional_context}" if additional_context else ""
         knowledge_part = f"\n{knowledge_ref}" if knowledge_ref else ""
@@ -507,30 +540,170 @@ class BidAIService:
 {knowledge_part}
 {additional_part}
 
-请撰写专业、详实的标书内容。要求：
-1. 内容要有针对性，紧扣招标要求
-2. 充分展示企业的资质和实力
-3. 引用具体的业绩案例（包含项目名称、甲方、金额、完成时间）和证书编号
-4. 如果知识库有相关参考模板，参考其结构和写法，但不要照搬
-5. 语言正式规范，符合投标文件要求
-6. 篇幅适中（500-2000字）
-7. 直接输出章节内容，不要加标题（标题已有），不要加 markdown 标记"""
+请撰写专业、详实的标书内容（500-2500 字）。如有参考样本，模仿其密度和层级。直接输出 markdown 正文。"""
 
         client = self._get_client()
         stream = client.chat.completions.create(
             model=settings.AI_MODEL,
             messages=[
-                {"role": "system", "content": "你是一个标书编写专家。当用户给出【输出模板骨架】时，你**必须**按骨架的所有 ## 一级标题逐条填写，不允许偷懒、跳过、合并标题或提前结束。每节都要写满 350+ 字，含具体工艺数字、行业术语和企业资料引用。整篇内容 ≥2500 字（如骨架有 10 项则 ≥3500 字）。优先保证完整性而非简洁性。"},
+                {"role": "system", "content": "你是一个经验丰富的标书编写专家。"},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=8192,
             temperature=0.4,
             stream=True,
         )
-
         for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+                yield {"content": chunk.choices[0].delta.content}
+
+    # ── 多轮生成（核心：每个 ## 子主题独立调一次 AI）──────────
+
+    async def _multi_turn_section_stream(
+        self, db: AsyncSession, section, checklist: list[str], *,
+        tender_requirements: Optional[str] = None,
+        additional_context: Optional[str] = None,
+    ):
+        # 1) 共享上下文（只查一次）
+        company_info = await self._get_company_info(db)
+        if tender_requirements:
+            tender_req = f"【招标要求】\n{tender_requirements}"
+        else:
+            tender_req = await self._get_tender_requirements(db, section.project_id)
+        scoring_block = await self._get_scoring_items_for_section(db, section.id)
+
+        client = self._get_client()
+        written: list[tuple[str, str]] = []  # [(标题, 末段 100 字), ...]
+        total = len(checklist)
+
+        for idx, item in enumerate(checklist):
+            subtopic_title, subtopic_hint = self._parse_checklist_item(item)
+
+            # 进度事件
+            yield {"progress": {
+                "current": idx + 1,
+                "total": total,
+                "subtopic": subtopic_title,
+            }}
+
+            # 子主题级 RAG 查询：按"章节标题 - 子主题 hint"作 query
+            rag_query = f"{section.title} {subtopic_title} {subtopic_hint}".strip()
+            rag_ref = await self._get_knowledge_reference(db, rag_query)
+
+            prev_summary = self._format_prev_summary(written)
+            prompt = self._build_subtopic_prompt(
+                section_title=section.title,
+                subtopic_title=subtopic_title,
+                subtopic_hint=subtopic_hint,
+                rag_ref=rag_ref,
+                tender_req=tender_req,
+                company_info=company_info,
+                scoring_block=scoring_block,
+                prev_summary=prev_summary,
+                additional_context=additional_context,
+            )
+
+            section_buffer: list[str] = []
+            try:
+                stream = client.chat.completions.create(
+                    model=settings.AI_MODEL,
+                    messages=[
+                        {"role": "system", "content": (
+                            "你是标书撰写专家。当前任务是为指定的子主题深度展开 800-1500 字。"
+                            "**只能写当前子主题**，不允许跨写其他子主题。"
+                            "必须用三级 markdown（## → ### → 编号清单），含 ≥5 处量化指标和印刷行业术语。"
+                            "优先保证篇幅与具体度。"
+                        )},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=4096,
+                    temperature=0.4,
+                    stream=True,
+                )
+                # 段间分隔（除第一节外）
+                if idx > 0:
+                    yield {"content": "\n\n"}
+                    section_buffer.append("\n\n")
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        text = chunk.choices[0].delta.content
+                        section_buffer.append(text)
+                        yield {"content": text}
+            except Exception as e:
+                logger.warning(f"[多轮生成] 子主题失败 {subtopic_title!r}: {e}")
+                err = f"\n\n## {subtopic_title}\n\n（本节生成失败：{type(e).__name__}，请重新生成）\n\n"
+                section_buffer = [err]
+                yield {"content": err}
+
+            # 累加供下节回顾
+            full = "".join(section_buffer).strip()
+            tail = full[-100:] if full else ""
+            written.append((subtopic_title, tail))
+            yield {"section_done": {
+                "subtopic": subtopic_title,
+                "word_count": len(full),
+            }}
+
+    # ── 多轮辅助 ──────────────────────────────────────────────
+
+    @staticmethod
+    def _parse_checklist_item(item: str) -> tuple[str, str]:
+        """从 'X、xxx（hint）' 中切出 标题 / hint"""
+        item = (item or "").strip()
+        if "（" in item:
+            idx = item.index("（")
+            return item[:idx].strip(), item[idx:].strip()
+        return item, ""
+
+    @staticmethod
+    def _format_prev_summary(written: list[tuple[str, str]]) -> str:
+        if not written:
+            return ""
+        lines = ["【已写章节回顾】（确保当前节与前面衔接、不重复）"]
+        for title, tail in written:
+            snippet = tail.replace("\n", " ")[-80:]
+            lines.append(f"- {title} ... {snippet}")
+        return "\n".join(lines)
+
+    def _build_subtopic_prompt(self, *, section_title: str, subtopic_title: str,
+                                subtopic_hint: str, rag_ref: str, tender_req: str,
+                                company_info: str, scoring_block: str,
+                                prev_summary: str, additional_context: Optional[str]) -> str:
+        parts = [
+            f"你是标书撰写专家，正在分子主题深度展开「{section_title}」章节。",
+            f"当前要写的子主题是【{subtopic_title}】。",
+        ]
+        if prev_summary:
+            parts.append(f"\n{prev_summary}\n")
+        if rag_ref:
+            parts.append(f"\n{rag_ref}\n")
+        if tender_req:
+            parts.append(f"\n{tender_req}\n")
+        if company_info:
+            parts.append(f"\n{company_info}\n")
+        if scoring_block:
+            parts.append(f"\n{scoring_block}\n")
+        if additional_context:
+            parts.append(f"\n额外要求：\n{additional_context}\n")
+
+        parts.append(f"""
+【本节硬性要求（不达标视为低质量）】
+1. 严格写当前子主题：{subtopic_title}
+   {subtopic_hint}
+2. 篇幅 800-1500 字（这是单节，不是整章）
+3. 三级 markdown 结构：
+   - 顶层：## {subtopic_title}
+   - 中层：### x.1 / ### x.2 / ### x.3 至少 2-3 个二级要点
+   - 底层：（1）（2）（3）编号清单，每个 ### 至少 3 个编号项
+4. 至少 5 处量化指标（数字+单位，如 ≤0.2mm / 7×24h / 22-25℃ / 99.5% / 250g/㎡）
+   严禁"较高""丰富""完善""一定""精准把控""严格管控"等空话
+5. 用印刷行业术语（晒版/出片/套印/水墨平衡/网点/油墨密度/烫银/哑膜/覆膜/锁线/模切/卡板/CMYK/电化铝等）
+6. 引用企业素材时具体到「项目名（甲方+金额X.X万元+年X月）」格式
+7. 模仿【行业写作风格参考】的密度和层级，但不照抄文字（重新组织）
+8. 直接以 ## {subtopic_title} 开头，**只写本节**，不要写其他子主题
+9. 不带"以下是..."引导语，不要总结，不要展望
+""")
+        return "\n".join(parts)
 
     async def check_bid_compliance(
         self,
