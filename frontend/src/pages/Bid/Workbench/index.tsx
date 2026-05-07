@@ -14,7 +14,7 @@ import {
 } from '@ant-design/icons';
 import {
   getBidProject, getSectionTree, createSection, updateSection, deleteSection, reorderSections,
-  aiGenerateSectionStream, exportBidWord, generateBidFramework, batchAiGenerate,
+  aiGenerateSectionStream, exportBidWord, generateBidFramework,
   previewBidDocument, fillLibrarySections,
   runBidDetection, getDetectReports, getDetectReportDetail,
 } from '@/services/bid';
@@ -324,10 +324,6 @@ export default function BidWorkbenchPage() {
 
   // 一键生成框架状态
   const [frameworkLoading, setFrameworkLoading] = useState(false);
-
-  // 批量 AI 生成状态
-  const [batchLoading, setBatchLoading] = useState(false);
-  const [batchProgress, setBatchProgress] = useState('');
 
   // 是否已有解析过的招标文件
   const [hasTenderDoc, setHasTenderDoc] = useState(false);
@@ -656,30 +652,6 @@ export default function BidWorkbenchPage() {
     }
   };
 
-  // 批量 AI 生成所有 AI_GENERATE 章节
-  const handleBatchAiGenerate = async () => {
-    setBatchLoading(true);
-    setBatchProgress('准备中...');
-    await batchAiGenerate(
-      projectId,
-      (current, total, title) => {
-        setBatchProgress(`正在生成 (${current}/${total})：${title}`);
-      },
-      (_sectionId, title, wordCount) => {
-        message.success(`「${title}」生成完成 (${wordCount}字)`);
-      },
-      (total) => {
-        setBatchLoading(false);
-        setBatchProgress('');
-        message.success(`全部 ${total} 个AI章节生成完成`);
-        loadSections();
-      },
-      (title, err) => {
-        message.error(`「${title}」生成失败: ${err}`);
-      },
-    );
-  };
-
   // 渲染树节点标题
   const renderTreeTitle = (node: TreeDataNode & { data?: BidSection }) => {
     const section = node.data;
@@ -864,15 +836,6 @@ export default function BidWorkbenchPage() {
         </Tag>
         <div style={{ flex: 1 }} />
         <Space>
-          <Button
-            type="primary"
-            icon={<RobotOutlined />}
-            loading={batchLoading}
-            onClick={handleBatchAiGenerate}
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)', border: 'none' }}
-          >
-            {batchLoading ? batchProgress : '批量AI生成'}
-          </Button>
           <Button
             icon={<DatabaseOutlined />}
             loading={fillLibraryLoading}

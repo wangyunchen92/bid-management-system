@@ -121,7 +121,6 @@ export const BID_API = {
   PROJECT_EXPORT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/export`,
   PROJECT_GENERATE_FRAMEWORK: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/generate-framework`,
   PROJECT_FILL_LIBRARY: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/fill-library-sections`,
-  PROJECT_BATCH_AI: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/batch-ai-generate`,
   PROJECT_FRAMEWORK_FROM_TENDER: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/framework-from-tender`,
   // 标书检测
   PROJECT_DETECT: (projectId: number) => `${API_PREFIX}/bid/projects/${projectId}/detect`,

@@ -94,7 +94,7 @@ class BidDetectService:
                         "TEMPLATE": "请检查知识库是否有对应模板，或重新生成框架",
                         "LIBRARY": "请在企业资料库维护数据后，点击「填充资料库」",
                         "MANUAL": "请手动填写该章节内容",
-                        "AI_GENERATE": "请点击「AI生成」或「批量AI生成」生成内容",
+                        "AI_GENERATE": "请点击章节内的「AI生成」按钮生成内容",
                     }.get(s.section_type, "请填写该章节内容"),
                     "section_title": s.title,
                 })
