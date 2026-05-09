@@ -16,6 +16,9 @@ from app.models.tender_document import TenderDocument
 
 logger = logging.getLogger(__name__)
 
+# catch-all 父章节关键词：命中任一则视为"大筐"，评分项会被拆成子章节
+CATCH_ALL_TITLES = ["其他相关证明材料", "其他证明材料", "补充资料", "补充信息", "其他材料"]
+
 # 标准标书框架（政府采购·印刷服务类）
 # 从多份真实投标文件总结，覆盖资格响应 + 商务报价 + 技术方案三大板块
 # 每个章节有：标题、类型、知识库匹配关键词、说明
@@ -368,14 +371,14 @@ class BidFrameworkService:
             ai_template = chapter.get("template") or ""
 
             # ── 路由分发 ──
-            # 1. 标准应标函：直接用库模板（最高优先级，忽略 AI 抽出的 template）
+            # 1. AI 抽到招标原文 → 优先用（最贴合本次招标）
+            # 2. 命中标准应标函 → 回退库模板（招标没抽到时）
+            # 3. TEMPLATE 类型兜底 → 按关键词找库模板
             std_template_id = self._match_standard_letter(chapter["title"])
-            if std_template_id:
-                content = await self._build_from_library(db, std_template_id, project)
-            # 2. AI 抽到 template：走 AI 抽取路径（含 markdown 修复）
-            elif ai_template:
+            if ai_template:
                 content = await self._build_from_ai_extract(db, ai_template, project, section_type)
-            # 3. TEMPLATE 类型 + 无 AI 抽：兜底匹配关键词找库模板
+            elif std_template_id:
+                content = await self._build_from_library(db, std_template_id, project)
             elif section_type == "TEMPLATE":
                 fallback_id = await self._match_template(db, [chapter["title"]])
                 content = await self._build_from_library(db, fallback_id, project) if fallback_id else ""
@@ -411,64 +414,161 @@ class BidFrameworkService:
             }
 
         # 7. 落库评分项 + 自动关联章节（链路 B v1）
-        scoring_count, link_count = await self._persist_scoring_items(
-            db, project_id, parse_result, created_sections
+        # catch-all 命中拆子节；hint 未命中按推断类型新建顶级节
+        scoring_count, link_count, scoring_new_sections = await self._persist_scoring_items(
+            db, project_id, parse_result, created_sections, user_id
         )
+
+        for sec in scoring_new_sections:
+            yield {
+                "type": "section_created",
+                "title": sec.title,
+                "section_type": sec.section_type,
+                "has_content": False,
+            }
 
         await db.commit()
         yield {
             "type": "done",
-            "total": len(merged),
+            "total": len(merged) + len(scoring_new_sections),
             "with_content": with_content,
             "scoring_items": scoring_count,
             "scoring_links": link_count,
         }
 
     async def _persist_scoring_items(self, db: AsyncSession, project_id: int,
-                                      parse_result: dict, created_sections: list) -> tuple[int, int]:
-        """从 parse_result.scoring.details 落库 + 按 linked_chapter_hint 自动关联章节"""
+                                      parse_result: dict, created_sections: list,
+                                      user_id: int) -> tuple[int, int, list]:
+        """从 parse_result.scoring.details 落库 + 按 linked_chapter_hint 自动关联章节。
+
+        匹配优先级：
+        1. hint 命中 catch-all 父章节 → 按 item_name 拆 LIBRARY 子章节
+        2. hint 命中已有顶级章节 → 直接关联
+        3. hint 未命中任何章节 → 按 hint 推断类型新建顶级章节（AI_GENERATE/LIBRARY/...）
+
+        返回 (scoring_count, link_count, new_sections)。new_sections 包含子节和新建顶级节。
+        """
         from app.models.bid import BidScoringItem, BidSectionScoringItem
 
         details = (parse_result.get("scoring") or {}).get("details") or []
         if not details:
-            return 0, 0
+            return 0, 0, []
 
         sections_by_title = {s.title: s for s in created_sections}
+        catch_all_parents = [
+            s for s in created_sections
+            if any(kw in s.title for kw in CATCH_ALL_TITLES)
+        ]
+        max_top_sort = max((s.sort_order or 0) for s in created_sections) if created_sections else 0
+
+        child_section_cache: dict[tuple[int, str], BidSection] = {}
+        # 新建顶级节按 hint 复用
+        new_top_cache: dict[str, BidSection] = {}
+        new_sections: list[BidSection] = []
         scoring_count = 0
         link_count = 0
 
         for sort_idx, item in enumerate(details):
             if not isinstance(item, dict) or not item.get("item"):
                 continue
+            item_name = item.get("item", "")[:200]
+            hint = (item.get("linked_chapter_hint") or "").strip()[:200] or None
+
             scoring = BidScoringItem(
                 project_id=project_id,
                 category=(item.get("category") or "技术").strip()[:20],
-                item_name=item.get("item", "")[:200],
+                item_name=item_name,
                 max_score=item.get("max_score"),
                 criteria=item.get("criteria") or "",
                 required_evidence=item.get("required_evidence") or None,
-                linked_chapter_hint=(item.get("linked_chapter_hint") or "").strip()[:200] or None,
+                linked_chapter_hint=hint,
                 sort_order=sort_idx,
             )
             db.add(scoring)
             await db.flush()
             scoring_count += 1
 
-            # 自动关联：linked_chapter_hint 包含/被包含 章节 title
-            hint = scoring.linked_chapter_hint
-            if hint:
-                for title, section in sections_by_title.items():
-                    if hint in title or title in hint:
-                        db.add(BidSectionScoringItem(
-                            section_id=section.id,
-                            scoring_item_id=scoring.id,
-                            sort_order=0,
-                        ))
-                        link_count += 1
-                        break
+            if not hint:
+                continue
+
+            # 1. catch-all 父章节命中 → 拆子节
+            matched_parent = next(
+                (p for p in catch_all_parents if hint in p.title or p.title in hint),
+                None,
+            )
+            if matched_parent:
+                cache_key = (matched_parent.id, item_name)
+                child = child_section_cache.get(cache_key)
+                if child is None:
+                    child = BidSection(
+                        project_id=project_id,
+                        parent_id=matched_parent.id,
+                        title=item_name[:200],
+                        content="",
+                        sort_order=1000 + len(new_sections),
+                        section_type="LIBRARY",
+                        status="PENDING",
+                        word_count=0,
+                        created_by=user_id,
+                        updated_by=user_id,
+                    )
+                    db.add(child)
+                    await db.flush()
+                    child_section_cache[cache_key] = child
+                    new_sections.append(child)
+                db.add(BidSectionScoringItem(
+                    section_id=child.id,
+                    scoring_item_id=scoring.id,
+                    sort_order=0,
+                ))
+                link_count += 1
+                continue
+
+            # 2. 已有顶级章节命中
+            matched_top = next(
+                (s for t, s in sections_by_title.items() if hint in t or t in hint),
+                None,
+            )
+            if matched_top:
+                db.add(BidSectionScoringItem(
+                    section_id=matched_top.id,
+                    scoring_item_id=scoring.id,
+                    sort_order=0,
+                ))
+                link_count += 1
+                continue
+
+            # 3. 未命中：按 hint 推断类型新建顶级章节
+            new_top = new_top_cache.get(hint)
+            if new_top is None:
+                inferred_type = self._infer_type(hint)
+                max_top_sort += 1
+                new_top = BidSection(
+                    project_id=project_id,
+                    parent_id=None,
+                    title=hint[:200],
+                    content="",
+                    sort_order=max_top_sort,
+                    section_type=inferred_type,
+                    status="PENDING",
+                    word_count=0,
+                    created_by=user_id,
+                    updated_by=user_id,
+                )
+                db.add(new_top)
+                await db.flush()
+                new_top_cache[hint] = new_top
+                sections_by_title[new_top.title] = new_top
+                new_sections.append(new_top)
+            db.add(BidSectionScoringItem(
+                section_id=new_top.id,
+                scoring_item_id=scoring.id,
+                sort_order=0,
+            ))
+            link_count += 1
 
         await db.flush()
-        return scoring_count, link_count
+        return scoring_count, link_count, new_sections
 
     def _merge_chapters_for_tender(self, ai_chapters: list) -> list:
         """合并 AI 抽取的章节 + ESSENTIAL_FALLBACK 必备补充 + 补充信息章节。
